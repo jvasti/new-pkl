@@ -61,6 +61,9 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
                     parse_const(lexer, id)
                 }
                 Ok(PklToken::Space) => continue,
+                Ok(PklToken::DocComment(_))
+                | Ok(PklToken::LineComment(_))
+                | Ok(PklToken::MultilineComment(_)) => continue,
                 Ok(PklToken::NewLine) => {
                     is_newline = true;
                     continue;
@@ -99,8 +102,13 @@ fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> 
             Ok(PklToken::Float(f)) => Ok(PklValue::Float(f)),
             Ok(PklToken::String(s)) => Ok(PklValue::String(s)),
             Ok(PklToken::MultiLineString(s)) => Ok(PklValue::MultiLineString(s)),
+
             Ok(PklToken::Space) => Ok(parse_value(lexer)?),
             Ok(PklToken::NewLine) => Ok(parse_value(lexer)?),
+            Ok(PklToken::DocComment(_))
+            | Ok(PklToken::LineComment(_))
+            | Ok(PklToken::MultilineComment(_)) => Ok(parse_value(lexer)?),
+
             Err(e) => Err((e.to_string(), lexer.span())),
             _ => Err((
                 "unexpected token here (context: value)".to_owned(),
@@ -125,6 +133,10 @@ fn parse_const<'a>(lexer: &mut Lexer<'a, PklToken<'a>>, name: &'a str) -> Result
             }
             Ok(PklToken::Space) => Ok(parse_const(lexer, name)?),
             Ok(PklToken::NewLine) => Ok(parse_const(lexer, name)?),
+            Ok(PklToken::DocComment(_))
+            | Ok(PklToken::LineComment(_))
+            | Ok(PklToken::MultilineComment(_)) => Ok(parse_const(lexer, name)?),
+
             Err(e) => Err((e.to_string(), lexer.span())),
             _ => Err((
                 "unexpected token here (context: constant)".to_owned(),
