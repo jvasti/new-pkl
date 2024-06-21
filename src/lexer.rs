@@ -1,4 +1,8 @@
-use logos::Logos;
+use logos::{Logos, Span};
+
+type Error = (String, Span);
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, PartialOrd, Logos)]
 #[logos(skip r"[\t]+")]
@@ -87,19 +91,11 @@ pub enum PklToken<'a> {
     })]
     OctalInt(i64),
 
-    #[regex(r"NaN|-?Infinity|(-?(?:0|[1-9]+(?:_?\d)*)?(?:\.\d+(?:_?\d)*)?(?:[eE][+-]?\d+(?:_?\d)*)?)", |lex| {
+    #[token("NaN", |_| std::f64::NAN)]
+    #[token("Infinity", |_| std::f64::INFINITY)]
+    #[token("-Infinity", |_| std::f64::NEG_INFINITY)]
+    #[regex(r"-?(?:0|[1-9]+(?:_?\d)*)?(?:\.\d+(?:_?\d)*)?(?:[eE][+-]?\d+(?:_?\d)*)?", |lex| {
         let raw = lex.slice();
-
-        if raw == "NaN" {
-            return std::f64::NAN;
-        }
-        if raw == "Infinity" {
-            return std::f64::INFINITY;
-        }
-        if raw == "-Infinity" {
-            return std::f64::NEG_INFINITY;
-        }
-
         let clean_raw: String = raw.chars().filter(|&c| c != '_').collect();
         clean_raw.parse::<f64>().unwrap()
     }, priority = 2)]
@@ -113,7 +109,11 @@ pub enum PklToken<'a> {
     #[regex(r#""([^"\\]|\\["\\bnfrt]|\\u\{[a-fA-F0-9]+})*""#, |lex| let raw=lex.slice();&raw[1..raw.len()-1])]
     String(&'a str),
 
-    // does pkl support " in the multiline strings ?
-    #[regex(r#""""\n([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*\n""""#, |lex| let raw=lex.slice();&raw[3..raw.len()-3])]
+    // does pkl support <"> character in the multiline strings ?
+    #[regex(r#""""\n([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""""#, |lex| {
+        // need to return err if raw[raw.len()-4..=raw.len()-4] != "\n"
+        let raw=lex.slice();
+        &raw[4..raw.len()-4]
+    })]
     MultiLineString(&'a str),
 }

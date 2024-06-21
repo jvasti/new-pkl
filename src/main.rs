@@ -11,6 +11,12 @@ b = true
 octal = 0o1_237
 hex = 0x129_EF2
 binary = 0o1_010_101
+
+multiline = \"\"\"
+Although the Dodo is extinct,
+the species will be remembered.
+efefefefef
+\"\"\"
 ",
     );
 
