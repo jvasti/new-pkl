@@ -24,7 +24,7 @@ pub enum PklToken<'a> {
     #[token("false", |_| false)]
     Bool(bool),
 
-    #[regex(r"-?\d(?:_?\d)*", |lex| {
+    #[regex(r"-?\d+(?:_?\d)*", |lex| {
         let raw = lex.slice();
         // Remove underscores for parsing
         let clean_raw: String = raw.chars().filter(|&c| c != '_').collect();
