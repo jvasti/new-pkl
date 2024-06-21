@@ -112,6 +112,8 @@ pub enum PklToken<'a> {
 
     #[regex(r#""([^"\\]|\\["\\bnfrt]|\\u\{[a-fA-F0-9]+})*""#, |lex| let raw=lex.slice();&raw[1..raw.len()-1])]
     String(&'a str),
+
+    // does pkl support " in the multiline strings ?
     #[regex(r#""""\n([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*\n""""#, |lex| let raw=lex.slice();&raw[3..raw.len()-3])]
     MultiLineString(&'a str),
 }
