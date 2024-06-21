@@ -7,6 +7,8 @@ pub enum PklToken<'a> {
     BlankIdentifier,
     #[token(" ")]
     Space,
+    #[token("\n")]
+    NewLine,
     #[token("=")]
     EqualSign,
     #[token("true")]
@@ -103,7 +105,7 @@ pub enum PklToken<'a> {
     }, priority = 2)]
     Float(f64),
 
-    #[regex(r#"(\$|[_\d*])?[a-zA-Z]\w+"#, |lex| lex.slice())]
+    #[regex(r#"(\$|_\d*)?[a-zA-Z]\w+"#, |lex| lex.slice())]
     Identifier(&'a str),
     #[regex(r#"`([^`\\]|\\[`\\bnfrt]|\\u\{[a-fA-F0-9]+})*`"#, |lex| {let raw=lex.slice();&raw[1..raw.len()-1]})]
     IllegalIdentifier(&'a str),
