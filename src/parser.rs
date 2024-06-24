@@ -7,6 +7,7 @@ use std::{
 
 pub type ParseError = (String, Span);
 pub type PklResult<T> = std::result::Result<T, ParseError>;
+pub type ExprHash<'a> = (HashMap<&'a str, PklExpr<'a>>, Range<usize>);
 
 /* ANCHOR: statements */
 /// Represent any valid Pkl value.
@@ -52,8 +53,6 @@ impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
         PklExpr::Identifier(value, indexes)
     }
 }
-
-type ExprHash<'a> = (HashMap<&'a str, PklExpr<'a>>, Range<usize>);
 
 /* ANCHOR: values */
 /// Represent any valid Pkl value.
