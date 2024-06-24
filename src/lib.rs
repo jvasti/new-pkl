@@ -17,6 +17,7 @@ pub struct Pkl<'a> {
 }
 
 impl<'a> Pkl<'a> {
+    /// Creates a new, empty `Pkl` instance.
     pub fn new() -> Self {
         Self {
             table: PklTable::new(),
@@ -24,13 +25,32 @@ impl<'a> Pkl<'a> {
         }
     }
 
+    /// Parses a PKL source string and populates the internal context.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The PKL source string to parse.
+    ///
+    /// # Returns
+    ///
+    /// A `PklResult` indicating success or failure.
     pub fn parse(&mut self, source: &'a str) -> PklResult<()> {
-        let parsed = self.generate_ast(source)?;
+        let mut parsed = self.generate_ast(source)?;
+        self.ast.append(&mut parsed);
         self.table.extends(ast_to_table(parsed)?);
 
         Ok(())
     }
 
+    /// Generates an AST from a PKL source string.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The PKL source string to parse.
+    ///
+    /// # Returns
+    ///
+    /// A `PklResult` containing the generated AST or an error message.
     pub fn generate_ast(&mut self, source: &'a str) -> PklResult<Vec<PklStatement<'a>>> {
         use logos::Logos;
         let mut lexer = PklToken::lexer(source);
