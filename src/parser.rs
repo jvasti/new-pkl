@@ -1,9 +1,11 @@
 use crate::lexer::PklToken;
 use logos::{Lexer, Span};
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut, Range},
-};
+use std::ops::{Deref, DerefMut, Range};
+
+#[cfg(feature = "hashbrown_support")]
+use hashbrown::Hashmap as HashMap;
+#[cfg(not(feature = "hashbrown_support"))]
+use std::collections::HashMap;
 
 pub type ParseError = (String, Span);
 pub type PklResult<T> = std::result::Result<T, ParseError>;
