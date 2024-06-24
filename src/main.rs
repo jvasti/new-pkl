@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use lexer::PklToken;
 use logos::Logos;
-use parser::{parse_pkl, ParseError, PklStatement, PklValue};
+use parser::{parse_pkl, ParseError, PklStatement};
 
 mod lexer;
 mod parser;
@@ -20,6 +20,8 @@ Although the Dodo is extinct,
 the species will be remembered.
 efefefefef
 \"\"\"
+
+identifier_var = multiline
 
 bird {
   name = \"Common wood pigeon\"
@@ -49,7 +51,7 @@ dodo {
     match parse_pkl(&mut lexer) {
         Ok(value) => {
             // println!("{:#?}", value);
-            let PklStatement::Constant(_, val, _) = &value[9];
+            let PklStatement::Constant(_, val, _) = &value[10];
             println!("{:?}", val);
             println!("{}", &lexer.source()[val.span()])
         }

@@ -14,9 +14,46 @@ type Result<T> = std::result::Result<T, ParseError>;
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklStatement<'a> {
-    Constant(&'a str, PklValue<'a>, Range<usize>),
+    Constant(&'a str, PklExpr<'a>, Range<usize>),
 }
 /* ANCHOR_END: statements */
+
+/* ANCHOR: expression */
+/// Represent any valid Pkl expression.
+#[derive(Debug, PartialEq, Clone)]
+pub enum PklExpr<'a> {
+    Identifier(&'a str, Range<usize>),
+    Value(PklValue<'a>),
+}
+
+impl<'a> PklExpr<'a> {
+    /// This function MUST be called only when we are sure `PklExpr` is a `PklValue`
+    pub fn extract_value(self) -> PklValue<'a> {
+        match self {
+            Self::Value(v) => v,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            Self::Value(v) => v.span(),
+            Self::Identifier(_, indexes) => indexes.to_owned(),
+        }
+    }
+}
+/* ANCHOR_END: expression */
+
+impl<'a> From<PklValue<'a>> for PklExpr<'a> {
+    fn from(value: PklValue<'a>) -> Self {
+        PklExpr::Value(value)
+    }
+}
+impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
+    fn from((value, indexes): (&'a str, Range<usize>)) -> Self {
+        PklExpr::Identifier(value, indexes)
+    }
+}
 
 /* ANCHOR: values */
 /// Represent any valid Pkl value.
@@ -35,7 +72,7 @@ pub enum PklValue<'a> {
     MultiLineString(&'a str, Range<usize>),
 
     /// An object.
-    Object(HashMap<&'a str, PklValue<'a>>, Range<usize>),
+    Object(HashMap<&'a str, PklExpr<'a>>, Range<usize>),
 
     /// ### An object amending another object:
     /// - First comes the name of the amended object,
@@ -66,7 +103,7 @@ pub enum PklValue<'a> {
 /* ANCHOR_END: values */
 
 impl<'a> Deref for PklStatement<'a> {
-    type Target = PklValue<'a>;
+    type Target = PklExpr<'a>;
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -74,7 +111,6 @@ impl<'a> Deref for PklStatement<'a> {
         }
     }
 }
-
 impl<'a> DerefMut for PklStatement<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
@@ -82,7 +118,6 @@ impl<'a> DerefMut for PklStatement<'a> {
         }
     }
 }
-
 impl<'a> PklStatement<'a> {
     pub fn span(&self) -> Range<usize> {
         match self {
@@ -128,17 +163,18 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
             Ok(PklToken::OpenBrace) => {
                 if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
                     match value {
-                        PklValue::Object(_, _)
-                        | PklValue::AmendingObject(_, _, _)
-                        | PklValue::AmendedObject(_, _, _) => {
+                        PklExpr::Value(PklValue::Object(_, _))
+                        | PklExpr::Value(PklValue::AmendingObject(_, _, _))
+                        | PklExpr::Value(PklValue::AmendedObject(_, _, _)) => {
                             let new_object = parse_object(lexer)?;
                             let start = rng.start;
                             let end = new_object.span().end;
                             *value = PklValue::AmendedObject(
-                                Box::new(value.clone()),
+                                Box::new(value.clone().extract_value()),
                                 Box::new(new_object),
                                 start..end,
                             )
+                            .into()
                         }
                         _ => {
                             return Err((
@@ -179,22 +215,26 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
 }
 /* ANCHOR_END: statement */
 
-/* ANCHOR: value */
-/// Parse a token stream into a Pkl value.
-fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
+/* ANCHOR: expression */
+/// Parse a token stream into a Pkl expression.
+fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'a>> {
     loop {
         match lexer.next() {
-            Some(Ok(PklToken::Bool(b))) => return Ok(PklValue::Bool(b, lexer.span())),
+            Some(Ok(PklToken::Bool(b))) => return Ok(PklValue::Bool(b, lexer.span()).into()),
+            Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
+                return Ok(PklExpr::Identifier(id, lexer.span()))
+            }
+
             Some(Ok(PklToken::Int(i)))
             | Some(Ok(PklToken::OctalInt(i)))
             | Some(Ok(PklToken::HexInt(i)))
-            | Some(Ok(PklToken::BinaryInt(i))) => return Ok(PklValue::Int(i, lexer.span())),
-            Some(Ok(PklToken::Float(f))) => return Ok(PklValue::Float(f, lexer.span())),
-            Some(Ok(PklToken::String(s))) => return Ok(PklValue::String(s, lexer.span())),
+            | Some(Ok(PklToken::BinaryInt(i))) => return Ok(PklValue::Int(i, lexer.span()).into()),
+            Some(Ok(PklToken::Float(f))) => return Ok(PklValue::Float(f, lexer.span()).into()),
+            Some(Ok(PklToken::String(s))) => return Ok(PklValue::String(s, lexer.span()).into()),
             Some(Ok(PklToken::MultiLineString(s))) => {
-                return Ok(PklValue::MultiLineString(s, lexer.span()))
+                return Ok(PklValue::MultiLineString(s, lexer.span()).into())
             }
-            Some(Ok(PklToken::OpenParen)) => return parse_amended_object(lexer),
+            Some(Ok(PklToken::OpenParen)) => return Ok(parse_amended_object(lexer)?.into()),
             Some(Ok(PklToken::Space))
             | Some(Ok(PklToken::NewLine))
             | Some(Ok(PklToken::DocComment(_)))
@@ -203,15 +243,15 @@ fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> 
             Some(Err(e)) => return Err((e.to_string(), lexer.span())),
             Some(_) => {
                 return Err((
-                    "unexpected token here (context: value)".to_owned(),
+                    "unexpected token here (context: expression)".to_owned(),
                     lexer.span(),
                 ))
             }
-            None => return Err(("empty values are not allowed".to_owned(), lexer.span())),
+            None => return Err(("empty expressions are not allowed".to_owned(), lexer.span())),
         }
     }
 }
-/* ANCHOR_END: value */
+/* ANCHOR_END: expression */
 
 /* ANCHOR: object */
 /// Parse a token stream into a Pkl object.
@@ -231,9 +271,9 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>>
                     ));
                 }
 
-                let value = parse_const_value(lexer)?;
+                let value = parse_const_expr(lexer)?;
 
-                is_newline = matches!(value, PklValue::Object(_, _));
+                is_newline = matches!(value, PklExpr::Value(PklValue::Object(_, _)));
 
                 hashmap.insert(id, value);
             }
@@ -321,23 +361,23 @@ fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklVa
 /// Parse a token stream into a Pkl const Statement.
 fn parse_const<'a>(lexer: &mut Lexer<'a, PklToken<'a>>, name: &'a str) -> Result<PklStatement<'a>> {
     let start = lexer.span().start;
-    let value = parse_const_value(lexer)?;
+    let value = parse_const_expr(lexer)?;
     let end = lexer.span().end;
 
     Ok(PklStatement::Constant(name, value, start..end))
 }
 /* ANCHOR_END: const */
 
-/* ANCHOR: const_value */
-/// Parse a token stream into a Pkl Value after an identifier.
-fn parse_const_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
+/* ANCHOR: const_expr */
+/// Parse a token stream into a Pkl Expr after an identifier.
+fn parse_const_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'a>> {
     loop {
         match lexer.next() {
             Some(Ok(PklToken::EqualSign)) => {
-                return parse_value(lexer);
+                return parse_expr(lexer);
             }
             Some(Ok(PklToken::OpenBrace)) => {
-                return parse_object(lexer);
+                return Ok(parse_object(lexer)?.into());
             }
             Some(Ok(PklToken::Space))
             | Some(Ok(PklToken::NewLine))
@@ -362,4 +402,4 @@ fn parse_const_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue
         }
     }
 }
-/* ANCHOR_END: const_value */
+/* ANCHOR_END: const_expr */
