@@ -31,11 +31,13 @@ bird {
 ";
 
     let time = Instant::now();
-    let src = src.repeat(1000);
+    let src = src.repeat(1);
     let mut lexer = PklToken::lexer(&src);
 
     match parse_pkl(&mut lexer) {
-        Ok(value) => println!("{:#?}", value),
+        Ok(value) => {
+            // println!("{:#?}", value);
+        }
         Err((msg, span)) => {
             println!("Error: {} at {:?}", msg, span)
             // use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};

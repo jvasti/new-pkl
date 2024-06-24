@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use logos::{Lexer, Span};
 
@@ -11,7 +11,7 @@ type Result<T> = std::result::Result<T, ParseError>;
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklStatement<'a> {
-    Constant(&'a str, PklValue<'a>),
+    Constant(&'a str, PklValue<'a>, Range<usize>),
 }
 /* ANCHOR_END: statements */
 
@@ -20,21 +20,42 @@ pub enum PklStatement<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklValue<'a> {
     /// true or false.
-    Bool(bool),
+    Bool(bool, Range<usize>),
     /// Any floating point number.
-    Float(f64),
+    Float(f64, Range<usize>),
     /// Any Integer.
-    Int(i64),
+    Int(i64, Range<usize>),
 
     /// Any quoted string.
-    String(&'a str),
+    String(&'a str, Range<usize>),
     /// Any multiline string.
-    MultiLineString(&'a str),
+    MultiLineString(&'a str, Range<usize>),
 
     /// An object.
-    Object(HashMap<&'a str, PklValue<'a>>),
+    Object(HashMap<&'a str, PklValue<'a>>, Range<usize>),
 }
 /* ANCHOR_END: values */
+
+impl<'a> PklStatement<'a> {
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            PklStatement::Constant(_, _, rng) => rng.clone(),
+        }
+    }
+}
+
+impl<'a> PklValue<'a> {
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            PklValue::Int(_, rng)
+            | PklValue::Bool(_, rng)
+            | PklValue::Float(_, rng)
+            | PklValue::Object(_, rng)
+            | PklValue::String(_, rng)
+            | PklValue::MultiLineString(_, rng) => rng.clone(),
+        }
+    }
+}
 
 /* ANCHOR: statement */
 /// Parse a token stream into a Pkl statement.
@@ -89,14 +110,14 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
 fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
     if let Some(token) = lexer.next() {
         match token {
-            Ok(PklToken::Bool(b)) => Ok(PklValue::Bool(b)),
+            Ok(PklToken::Bool(b)) => Ok(PklValue::Bool(b, lexer.span())),
             Ok(PklToken::Int(i))
             | Ok(PklToken::OctalInt(i))
             | Ok(PklToken::HexInt(i))
-            | Ok(PklToken::BinaryInt(i)) => Ok(PklValue::Int(i)),
-            Ok(PklToken::Float(f)) => Ok(PklValue::Float(f)),
-            Ok(PklToken::String(s)) => Ok(PklValue::String(s)),
-            Ok(PklToken::MultiLineString(s)) => Ok(PklValue::MultiLineString(s)),
+            | Ok(PklToken::BinaryInt(i)) => Ok(PklValue::Int(i, lexer.span())),
+            Ok(PklToken::Float(f)) => Ok(PklValue::Float(f, lexer.span())),
+            Ok(PklToken::String(s)) => Ok(PklValue::String(s, lexer.span())),
+            Ok(PklToken::MultiLineString(s)) => Ok(PklValue::MultiLineString(s, lexer.span())),
 
             Ok(PklToken::Space) => Ok(parse_value(lexer)?),
             Ok(PklToken::NewLine) => Ok(parse_value(lexer)?),
@@ -119,6 +140,7 @@ fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> 
 /* ANCHOR: object */
 /// Parse a token stream into a Pkl object.
 fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
+    let start = lexer.span().start;
     let mut hashmap = HashMap::new();
     let mut is_newline = true;
 
@@ -136,7 +158,7 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>>
 
                     let value = parse_const_value(lexer)?;
 
-                    if let PklValue::Object(_) = &value {
+                    if let PklValue::Object(_, _) = &value {
                         is_newline = true
                     } else {
                         is_newline = false
@@ -165,16 +187,19 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>>
         }
     }
 
-    Ok(PklValue::Object(hashmap))
+    let end = lexer.span().end;
+    Ok(PklValue::Object(hashmap, start..end))
 }
 /* ANCHOR_END: object */
 
 /* ANCHOR: const */
 /// Parse a token stream into a Pkl const Statement.
 fn parse_const<'a>(lexer: &mut Lexer<'a, PklToken<'a>>, name: &'a str) -> Result<PklStatement<'a>> {
+    let start = lexer.span().start;
     let value = parse_const_value(lexer)?;
+    let end = lexer.span().end;
 
-    Ok(PklStatement::Constant(name, value))
+    Ok(PklStatement::Constant(name, value, start..end))
 }
 /* ANCHOR_END: const */
 
