@@ -1,11 +1,9 @@
+use crate::lexer::PklToken;
+use logos::{Lexer, Span};
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut, Range},
 };
-
-use logos::{Lexer, Span};
-
-use crate::lexer::PklToken;
 
 pub type ParseError = (String, Span);
 type Result<T> = std::result::Result<T, ParseError>;
@@ -55,6 +53,8 @@ impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
     }
 }
 
+type ExprHash<'a> = (HashMap<&'a str, PklExpr<'a>>, Range<usize>);
+
 /* ANCHOR: values */
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
@@ -72,7 +72,10 @@ pub enum PklValue<'a> {
     MultiLineString(&'a str, Range<usize>),
 
     /// An object.
-    Object(HashMap<&'a str, PklExpr<'a>>, Range<usize>),
+    Object(ExprHash<'a>),
+
+    /// A Class instance.
+    ClassInstance(&'a str, ExprHash<'a>, Range<usize>),
 
     /// ### An object amending another object:
     /// - First comes the name of the amended object,
@@ -85,7 +88,7 @@ pub enum PklValue<'a> {
     ///     prop = "attribute"
     /// }
     /// ```
-    AmendingObject(&'a str, Box<PklValue<'a>>, Range<usize>),
+    AmendingObject(&'a str, ExprHash<'a>, Range<usize>),
 
     /// ### An amended object.
     /// Different from `AmendingObject`
@@ -98,7 +101,7 @@ pub enum PklValue<'a> {
     ///    other_prop = "other_attribute"
     /// }
     /// ```
-    AmendedObject(Box<PklValue<'a>>, Box<PklValue<'a>>, Range<usize>),
+    AmendedObject(Box<PklValue<'a>>, ExprHash<'a>, Range<usize>),
 }
 /* ANCHOR_END: values */
 
@@ -126,15 +129,27 @@ impl<'a> PklStatement<'a> {
     }
 }
 
+impl<'a> From<ExprHash<'a>> for PklValue<'a> {
+    fn from(value: ExprHash<'a>) -> Self {
+        PklValue::Object(value)
+    }
+}
+impl<'a> From<ExprHash<'a>> for PklExpr<'a> {
+    fn from(value: ExprHash<'a>) -> Self {
+        PklExpr::Value(value.into())
+    }
+}
+
 impl<'a> PklValue<'a> {
     pub fn span(&self) -> Range<usize> {
         match self {
             PklValue::Int(_, rng)
             | PklValue::Bool(_, rng)
             | PklValue::Float(_, rng)
-            | PklValue::Object(_, rng)
+            | PklValue::Object((_, rng))
             | PklValue::AmendingObject(_, _, rng)
             | PklValue::AmendedObject(_, _, rng)
+            | PklValue::ClassInstance(_, _, rng)
             | PklValue::String(_, rng)
             | PklValue::MultiLineString(_, rng) => rng.clone(),
         }
@@ -163,15 +178,15 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
             Ok(PklToken::OpenBrace) => {
                 if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
                     match value {
-                        PklExpr::Value(PklValue::Object(_, _))
+                        PklExpr::Value(PklValue::Object((_, _)))
                         | PklExpr::Value(PklValue::AmendingObject(_, _, _))
                         | PklExpr::Value(PklValue::AmendedObject(_, _, _)) => {
                             let new_object = parse_object(lexer)?;
                             let start = rng.start;
-                            let end = new_object.span().end;
+                            let end = new_object.1.end;
                             *value = PklValue::AmendedObject(
                                 Box::new(value.clone().extract_value()),
-                                Box::new(new_object),
+                                new_object,
                                 start..end,
                             )
                             .into()
@@ -224,6 +239,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'a>> {
             Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
                 return Ok(PklExpr::Identifier(id, lexer.span()))
             }
+            Some(Ok(PklToken::New)) => return parse_class_instance(lexer),
 
             Some(Ok(PklToken::Int(i)))
             | Some(Ok(PklToken::OctalInt(i)))
@@ -255,7 +271,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'a>> {
 
 /* ANCHOR: object */
 /// Parse a token stream into a Pkl object.
-fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
+fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<ExprHash<'a>> {
     let start = lexer.span().start;
     let mut hashmap = HashMap::new();
     let mut is_newline = true;
@@ -273,7 +289,7 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>>
 
                 let value = parse_const_expr(lexer)?;
 
-                is_newline = matches!(value, PklExpr::Value(PklValue::Object(_, _)));
+                is_newline = matches!(value, PklExpr::Value(PklValue::Object((_, _))));
 
                 hashmap.insert(id, value);
             }
@@ -285,7 +301,7 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>>
             }
             Ok(PklToken::CloseBrace) => {
                 let end = lexer.span().end;
-                return Ok(PklValue::Object(hashmap, start..end));
+                return Ok((hashmap, start..end));
             }
             Err(e) => {
                 return Err((e.to_string(), lexer.span()));
@@ -337,7 +353,7 @@ fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklVa
 
                 return Ok(PklValue::AmendingObject(
                     amended_object_name,
-                    Box::new(object),
+                    object,
                     start..end,
                 ));
             }
@@ -403,3 +419,62 @@ fn parse_const_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'
     }
 }
 /* ANCHOR_END: const_expr */
+
+fn parse_class_instance<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklExpr<'a>> {
+    let start = lexer.span().start;
+
+    let class_name = loop {
+        match lexer.next() {
+            Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
+                break id
+            }
+            Some(Ok(PklToken::Space))
+            | Some(Ok(PklToken::NewLine))
+            | Some(Ok(PklToken::DocComment(_)))
+            | Some(Ok(PklToken::LineComment(_)))
+            | Some(Ok(PklToken::MultilineComment(_))) => continue,
+            Some(Err(e)) => return Err((e.to_string(), lexer.span())),
+            Some(_) => {
+                return Err((
+                    "unexpected token here (context: class_instance), expected identifier"
+                        .to_owned(),
+                    lexer.span(),
+                ));
+            }
+            None => return Err(("Expected identifier".to_owned(), lexer.span())),
+        }
+    };
+
+    loop {
+        match lexer.next() {
+            Some(Ok(PklToken::OpenBrace)) => {
+                return Ok(PklValue::ClassInstance(
+                    class_name,
+                    parse_object(lexer)?,
+                    start..lexer.span().end,
+                )
+                .into());
+            }
+            Some(Ok(PklToken::Space))
+            | Some(Ok(PklToken::NewLine))
+            | Some(Ok(PklToken::DocComment(_)))
+            | Some(Ok(PklToken::LineComment(_)))
+            | Some(Ok(PklToken::MultilineComment(_))) => {
+                // Continue the loop to process the next token
+                continue;
+            }
+            Some(Err(e)) => {
+                return Err((e.to_string(), lexer.span()));
+            }
+            Some(_) => {
+                return Err((
+                    "unexpected token here (context: constant)".to_owned(),
+                    lexer.span(),
+                ));
+            }
+            None => {
+                return Err(("Expected '='".to_owned(), lexer.span()));
+            }
+        }
+    }
+}

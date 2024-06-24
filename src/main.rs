@@ -1,8 +1,7 @@
-use std::time::Instant;
-
 use lexer::PklToken;
 use logos::Logos;
 use parser::{parse_pkl, ParseError, PklStatement};
+use std::time::Instant;
 
 mod lexer;
 mod parser;
@@ -42,6 +41,12 @@ dodo {
 } {
   test = false
 }
+
+pigeon = new Bird {
+  name = \"Pigeon\"
+  lifespan = 8
+  migratory = false
+}
 ";
 
     let src = src.repeat(10000);
@@ -51,7 +56,7 @@ dodo {
     match parse_pkl(&mut lexer) {
         Ok(value) => {
             // println!("{:#?}", value);
-            let PklStatement::Constant(_, val, _) = &value[10];
+            let PklStatement::Constant(_, val, _) = &value[11];
             println!("{:?}", val);
             println!("{}", &lexer.source()[val.span()])
         }
