@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Range};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut, Range},
+};
 
 use logos::{Lexer, Span};
 
@@ -38,9 +41,47 @@ pub enum PklValue<'a> {
     /// - First comes the name of the amended object,
     /// - Then the additional values
     /// - Finally the range
+    ///
+    /// **Corresponds to:**
+    /// ```pkl
+    /// x = (other_object) {
+    ///     prop = "attribute"
+    /// }
+    /// ```
     AmendingObject(&'a str, Box<PklValue<'a>>, Range<usize>),
+
+    /// ### An amended object.
+    /// Different from `AmendingObject`
+    ///
+    /// **Corresponds to:**
+    /// ```pkl
+    /// x = {
+    ///    prop = "attribute"
+    /// } {
+    ///    other_prop = "other_attribute"
+    /// }
+    /// ```
+    AmendedObject(Box<PklValue<'a>>, Box<PklValue<'a>>, Range<usize>),
 }
 /* ANCHOR_END: values */
+
+impl<'a> Deref for PklStatement<'a> {
+    type Target = PklValue<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            PklStatement::Constant(_, value, _) => value,
+        }
+    }
+}
+
+impl<'a> DerefMut for PklStatement<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            PklStatement::Constant(_, value, _) => value,
+        }
+    }
+}
 
 impl<'a> PklStatement<'a> {
     pub fn span(&self) -> Range<usize> {
@@ -58,6 +99,7 @@ impl<'a> PklValue<'a> {
             | PklValue::Float(_, rng)
             | PklValue::Object(_, rng)
             | PklValue::AmendingObject(_, _, rng)
+            | PklValue::AmendedObject(_, _, rng)
             | PklValue::String(_, rng)
             | PklValue::MultiLineString(_, rng) => rng.clone(),
         }
@@ -82,6 +124,35 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
                 let statement = parse_const(lexer, id)?;
                 statements.push(statement);
                 is_newline = false;
+            }
+            Ok(PklToken::OpenBrace) => {
+                if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
+                    match value {
+                        PklValue::Object(_, _)
+                        | PklValue::AmendingObject(_, _, _)
+                        | PklValue::AmendedObject(_, _, _) => {
+                            let new_object = parse_object(lexer)?;
+                            let start = rng.start;
+                            let end = new_object.span().end;
+                            *value = PklValue::AmendedObject(
+                                Box::new(value.clone()),
+                                Box::new(new_object),
+                                start..end,
+                            )
+                        }
+                        _ => {
+                            return Err((
+                                "unexpected token here (context: global)".to_owned(),
+                                lexer.span(),
+                            ))
+                        }
+                    }
+                } else {
+                    return Err((
+                        "unexpected token here (context: global)".to_owned(),
+                        lexer.span(),
+                    ));
+                }
             }
             Ok(PklToken::Space)
             | Ok(PklToken::DocComment(_))

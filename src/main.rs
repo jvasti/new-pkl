@@ -32,6 +32,14 @@ bird {
 parrot = (pigeon) {
   name = \"Parrot\"
 }
+
+dodo {
+  name = \"Dodo\"
+} {
+  extinct = true
+} {
+  test = false
+}
 ";
 
     let src = src.repeat(10000);
@@ -41,7 +49,7 @@ parrot = (pigeon) {
     match parse_pkl(&mut lexer) {
         Ok(value) => {
             // println!("{:#?}", value);
-            let PklStatement::Constant(_, val, _) = &value[8];
+            let PklStatement::Constant(_, val, _) = &value[9];
             println!("{:?}", val);
             println!("{}", &lexer.source()[val.span()])
         }
