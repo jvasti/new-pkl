@@ -20,40 +20,48 @@ Although the Dodo is extinct,
 the species will be remembered.
 efefefefef
 \"\"\"
+
+bird {
+  name = \"Common wood pigeon\"
+  diet = \"Seeds\"
+  taxonomy {
+    species = \"Columba palumbus\"
+  }
+}
 ";
 
     let time = Instant::now();
-    let s = src.repeat(1000);
-    let mut lexer = PklToken::lexer(&s);
-
-    let filename = String::from("main.pkl");
+    let src = src.repeat(1000);
+    let mut lexer = PklToken::lexer(&src);
 
     match parse_pkl(&mut lexer) {
         Ok(value) => println!("{:#?}", value),
         Err((msg, span)) => {
-            use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
+            println!("Error: {} at {:?}", msg, span)
+            // use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
 
-            let mut colors = ColorGenerator::new();
+            // let mut colors = ColorGenerator::new();
 
-            let a = colors.next();
+            // let a = colors.next();
+            // let filename = String::from("main.pkl");
 
-            Report::build(ReportKind::Error, &filename, 12)
-                .with_message("Invalid Pkl".to_string())
-                .with_label(
-                    Label::new((&filename, span))
-                        .with_message(msg)
-                        .with_color(a),
-                )
-                .finish()
-                .eprint((&filename, Source::from(src)))
-                .unwrap();
+            // Report::build(ReportKind::Error, &filename, 12)
+            //     .with_message("Invalid Pkl".to_string())
+            //     .with_label(
+            //         Label::new((&filename, span))
+            //             .with_message(msg)
+            //             .with_color(a),
+            //     )
+            //     .finish()
+            //     .eprint((&filename, Source::from(src)))
+            //     .unwrap();
         }
     }
 
     println!(
         "{}ms to parse {} chars",
         time.elapsed().as_millis(),
-        s.len()
+        src.len()
     );
 
     Ok(())

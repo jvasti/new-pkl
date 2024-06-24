@@ -24,6 +24,13 @@ pub enum PklToken<'a> {
     #[token("false", |_| false)]
     Bool(bool),
 
+    #[token("{")]
+    OpenBrace,
+    #[token("}")]
+    CloseBrace,
+    #[token(",")]
+    Comma,
+
     #[regex(r"-?\d+(?:_?\d)*", |lex| {
         let raw = lex.slice();
         // Remove underscores for parsing

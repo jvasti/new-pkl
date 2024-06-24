@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use logos::{Lexer, Span};
 
 use crate::lexer::PklToken;
@@ -7,7 +9,7 @@ type Result<T> = std::result::Result<T, ParseError>;
 
 /* ANCHOR: statements */
 /// Represent any valid Pkl value.
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PklStatement<'a> {
     Constant(&'a str, PklValue<'a>),
 }
@@ -15,7 +17,7 @@ pub enum PklStatement<'a> {
 
 /* ANCHOR: values */
 /// Represent any valid Pkl value.
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PklValue<'a> {
     /// true or false.
     Bool(bool),
@@ -28,6 +30,9 @@ pub enum PklValue<'a> {
     String(&'a str),
     /// Any multiline string.
     MultiLineString(&'a str),
+
+    /// An object.
+    Object(HashMap<&'a str, PklValue<'a>>),
 }
 /* ANCHOR_END: values */
 
@@ -40,17 +45,7 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<Vec<PklState
     loop {
         if let Some(token) = lexer.next() {
             let result = match token {
-                Ok(PklToken::Identifier(id)) => {
-                    if !is_newline {
-                        return Err((
-                            "unexpected token here (context: global), expected newline".to_owned(),
-                            lexer.span(),
-                        ));
-                    }
-
-                    parse_const(lexer, id)
-                }
-                Ok(PklToken::IllegalIdentifier(id)) => {
+                Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
                     if !is_newline {
                         return Err((
                             "unexpected token here (context: global), expected newline".to_owned(),
@@ -121,21 +116,88 @@ fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> 
 }
 /* ANCHOR_END: value */
 
+/* ANCHOR: object */
+/// Parse a token stream into a Pkl object.
+fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
+    let mut hashmap = HashMap::new();
+    let mut is_newline = true;
+
+    loop {
+        if let Some(token) = lexer.next() {
+            match token {
+                Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
+                    if !is_newline {
+                        return Err((
+                            "unexpected token here (context: object), expected newline or comma"
+                                .to_owned(),
+                            lexer.span(),
+                        ));
+                    }
+
+                    let value = parse_const_value(lexer)?;
+
+                    if let PklValue::Object(_) = &value {
+                        is_newline = true
+                    } else {
+                        is_newline = false
+                    }
+
+                    hashmap.insert(id, value);
+                    continue;
+                }
+                Ok(PklToken::NewLine) | Ok(PklToken::Comma) => {
+                    is_newline = true;
+                    continue;
+                }
+                Ok(PklToken::Space) => continue,
+                Ok(PklToken::CloseBrace) => break,
+
+                Err(e) => return Err((e.to_string(), lexer.span())),
+                _ => {
+                    return Err((
+                        "unexpected token here (context: object)".to_owned(),
+                        lexer.span(),
+                    ))
+                }
+            }
+        } else {
+            return Err(("Missing object close brace".to_owned(), lexer.span()));
+        }
+    }
+
+    Ok(PklValue::Object(hashmap))
+}
+/* ANCHOR_END: object */
+
 /* ANCHOR: const */
 /// Parse a token stream into a Pkl const Statement.
 fn parse_const<'a>(lexer: &mut Lexer<'a, PklToken<'a>>, name: &'a str) -> Result<PklStatement<'a>> {
+    let value = parse_const_value(lexer)?;
+
+    Ok(PklStatement::Constant(name, value))
+}
+/* ANCHOR_END: const */
+
+/* ANCHOR: const_value */
+/// Parse a token stream into a Pkl Value after an identifier.
+fn parse_const_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> Result<PklValue<'a>> {
     if let Some(token) = lexer.next() {
         match token {
             Ok(PklToken::EqualSign) => {
                 let value = parse_value(lexer)?;
 
-                Ok(PklStatement::Constant(name, value))
+                Ok(value)
             }
-            Ok(PklToken::Space) => Ok(parse_const(lexer, name)?),
-            Ok(PklToken::NewLine) => Ok(parse_const(lexer, name)?),
+            Ok(PklToken::OpenBrace) => {
+                let value = parse_object(lexer)?;
+
+                Ok(value)
+            }
+            Ok(PklToken::Space) => Ok(parse_const_value(lexer)?),
+            Ok(PklToken::NewLine) => Ok(parse_const_value(lexer)?),
             Ok(PklToken::DocComment(_))
             | Ok(PklToken::LineComment(_))
-            | Ok(PklToken::MultilineComment(_)) => Ok(parse_const(lexer, name)?),
+            | Ok(PklToken::MultilineComment(_)) => Ok(parse_const_value(lexer)?),
 
             Err(e) => Err((e.to_string(), lexer.span())),
             _ => Err((
@@ -147,4 +209,4 @@ fn parse_const<'a>(lexer: &mut Lexer<'a, PklToken<'a>>, name: &'a str) -> Result
         Err(("Expected '='".to_owned(), lexer.span()))
     }
 }
-/* ANCHOR_END: const */
+/* ANCHOR_END: const_value */
