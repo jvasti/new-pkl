@@ -43,6 +43,36 @@ impl<'a> PklTable<'a> {
         self.variables.insert(name, value)
     }
 
+    /// Merges another `PklTable` into this table.
+    ///
+    /// This method takes another `PklTable` and inserts all of its variables into the current table.
+    /// If a variable with the same name already exists in the current table, it will be overwritten
+    /// with the value from the other table.
+    ///
+    /// # Arguments
+    ///
+    /// * `other_table` - The `PklTable` to merge into the current table.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut table1 = PklTable::new();
+    /// table1.insert("var1", PklValue::Int(1));
+    ///
+    /// let mut table2 = PklTable::new();
+    /// table2.insert("var2", PklValue::Int(2));
+    ///
+    /// table1.extends(table2);
+    ///
+    /// assert_eq!(table1.get("var1"), Some(&PklValue::Int(1)));
+    /// assert_eq!(table1.get("var2"), Some(&PklValue::Int(2)));
+    /// ```
+    pub fn extends(&mut self, other_table: PklTable<'a>) {
+        for (name, value) in other_table.variables {
+            self.insert(name, value);
+        }
+    }
+
     /// Retrieves the value of a variable with the given name from the context.
     ///
     /// # Arguments
