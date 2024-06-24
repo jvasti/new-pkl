@@ -49,6 +49,11 @@ fn main() -> PklResult<()> {
     pkl.remove("float_var");
     println!("{:?}", pkl.get_float("float_var")); // Err("Variable `float_var` not found")
 
+    // Or just generate an ast
+    let mut pkl = Pkl::new();
+    // the ast contains the start and end indexes of each value and statement
+    let ast = pkl.generate_ast(source)?;
+
     Ok(())
 }
 ```
