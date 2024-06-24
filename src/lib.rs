@@ -13,7 +13,6 @@ pub use table::PklValue;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Pkl<'a> {
     table: PklTable<'a>,
-    ast: Vec<PklStatement<'a>>,
 }
 
 impl<'a> Pkl<'a> {
@@ -21,7 +20,6 @@ impl<'a> Pkl<'a> {
     pub fn new() -> Self {
         Self {
             table: PklTable::new(),
-            ast: vec![],
         }
     }
 
@@ -35,8 +33,7 @@ impl<'a> Pkl<'a> {
     ///
     /// A `PklResult` indicating success or failure.
     pub fn parse(&mut self, source: &'a str) -> PklResult<()> {
-        let mut parsed = self.generate_ast(source)?;
-        self.ast.append(&mut parsed);
+        let parsed = self.generate_ast(source)?;
         self.table.extends(ast_to_table(parsed)?);
 
         Ok(())
