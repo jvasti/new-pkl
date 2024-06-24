@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use lexer::PklToken;
 use logos::Logos;
-use parser::{parse_pkl, ParseError};
+use parser::{parse_pkl, ParseError, PklStatement, PklValue};
 
 mod lexer;
 mod parser;
@@ -28,15 +28,22 @@ bird {
     species = \"Columba palumbus\"
   }
 }
+
+parrot = (pigeon) {
+  name = \"Parrot\"
+}
 ";
 
+    let src = src.repeat(10000);
     let time = Instant::now();
-    let src = src.repeat(1);
     let mut lexer = PklToken::lexer(&src);
 
     match parse_pkl(&mut lexer) {
         Ok(value) => {
             // println!("{:#?}", value);
+            let PklStatement::Constant(_, val, _) = &value[8];
+            println!("{:?}", val);
+            println!("{}", &lexer.source()[val.span()])
         }
         Err((msg, span)) => {
             println!("Error: {} at {:?}", msg, span)

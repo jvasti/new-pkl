@@ -28,6 +28,10 @@ pub enum PklToken<'a> {
     OpenBrace,
     #[token("}")]
     CloseBrace,
+    #[token("(")]
+    OpenParen,
+    #[token(")")]
+    CloseParen,
     #[token(",")]
     Comma,
 
