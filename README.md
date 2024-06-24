@@ -11,6 +11,10 @@ Fastest pkl-parsing crate out there!
 - Support for classical identifiers, $identifiers, _identifiers and illegal identifiers
 - Support for class instance
 
+## Installation
+
+When in your rust project, simply run: `cargo add new-pkl`
+
 ## Usage
 
 Here's an example of how to parse a PKL string and retrieve values from the context:
