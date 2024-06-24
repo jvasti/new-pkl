@@ -1,8 +1,10 @@
+use hashmap::ast_to_hashmap;
 use lexer::PklToken;
 use logos::Logos;
-use parser::{parse_pkl, ParseError, PklStatement};
+use parser::{parse_pkl, ParseError};
 use std::time::Instant;
 
+mod hashmap;
 mod lexer;
 mod parser;
 
@@ -22,13 +24,21 @@ efefefefef
 
 identifier_var = multiline
 
+bird_name = \"Common wood pigeon\"
+
 bird {
-  name = \"Common wood pigeon\"
+  name = bird_name
   diet = \"Seeds\"
   taxonomy {
     species = \"Columba palumbus\"
   }
 }
+
+pigeon {
+  name = \"Turtle dove\"
+  extinct = false
+}
+
 
 parrot = (pigeon) {
   name = \"Parrot\"
@@ -49,16 +59,19 @@ pigeon = new Bird {
 }
 ";
 
-    let src = src.repeat(10000);
+    let src = src.repeat(1);
     let time = Instant::now();
     let mut lexer = PklToken::lexer(&src);
 
     match parse_pkl(&mut lexer) {
         Ok(value) => {
             // println!("{:#?}", value);
-            let PklStatement::Constant(_, val, _) = &value[11];
-            println!("{:?}", val);
-            println!("{}", &lexer.source()[val.span()])
+            // let PklStatement::Constant(_, val, _) = &value[11];
+            // println!("{:?}", val);
+            // println!("{}", &lexer.source()[val.span()])
+
+            let hash = ast_to_hashmap(value)?;
+            println!("{:#?}", hash);
         }
         Err((msg, span)) => {
             println!("Error: {} at {:?}", msg, span)
