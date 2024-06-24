@@ -7,8 +7,20 @@ use hashbrown::Hashmap as HashMap;
 #[cfg(not(feature = "hashbrown_support"))]
 use std::collections::HashMap;
 
+/// Represents a parsing error in the PKL format.
+///
+/// A `ParseError` is a tuple consisting of:
+///
+/// * `String` - A message describing the error.
+/// * `Span` - The span in the source where the error occurred.
 pub type ParseError = (String, Span);
+
+/// A result type for PKL parsing operations.
+///
+/// The `PklResult` type is a specialized `Result` type used throughout the PKL parsing code.
+/// It represents either a successful result (`T`) or a `ParseError`.
 pub type PklResult<T> = std::result::Result<T, ParseError>;
+
 pub type ExprHash<'a> = (HashMap<&'a str, PklExpr<'a>>, Range<usize>);
 
 /* ANCHOR: statements */

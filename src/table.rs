@@ -6,14 +6,41 @@ use hashbrown::Hashmap as HashMap;
 #[cfg(not(feature = "hashbrown_support"))]
 use std::collections::HashMap;
 
+/// Represents a value in the PKL format.
+///
+/// The `PklValue` enum encapsulates various types of values that can be parsed from a PKL string.
+/// These include booleans, floats, integers, strings, multiline strings, objects, and class instances.
+///
+/// # Variants
+///
+/// * `Bool` - Represents a boolean value.
+/// * `Float` - Represents a floating-point number.
+/// * `Int` - Represents an integer, which can be decimal, octal, hex, or binary.
+/// * `String` - Represents a single-line string.
+/// * `MultiLineString` - Represents a multiline string.
+/// * `Object` - Represents a nested object, which is a hashmap of key-value pairs.
+/// * `ClassInstance` - Represents an instance of a class, which includes the class name and its properties.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklValue<'a> {
+    /// A boolean value.
     Bool(bool),
+
+    /// A floating-point number.
     Float(f64),
+
+    /// An integer value.
     Int(i64),
+
+    /// A single-line string.
     String(&'a str),
+
+    /// A multiline string.
     MultiLineString(&'a str),
+
+    /// A nested object represented as a hashmap of key-value pairs.
     Object(HashMap<&'a str, PklValue<'a>>),
+
+    /// An instance of a class, including the class name and its properties.
     ClassInstance(&'a str, HashMap<&'a str, PklValue<'a>>),
 }
 

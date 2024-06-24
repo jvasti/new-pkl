@@ -11,6 +11,7 @@ pub use parser::PklResult;
 pub use table::PklValue;
 
 #[derive(Debug, PartialEq, Clone)]
+/// The `Pkl` struct represents the main interface for working with PKL data.
 pub struct Pkl<'a> {
     table: PklTable<'a>,
 }
