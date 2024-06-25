@@ -149,6 +149,18 @@ impl<'a> PklStatement<'a> {
             PklStatement::Import(_, _, rng) => rng.clone(),
         }
     }
+    pub fn is_import(&self) -> bool {
+        match self {
+            PklStatement::Import(_, _, _) => true,
+            _ => false,
+        }
+    }
+    pub fn is_constant(&self) -> bool {
+        match self {
+            PklStatement::Constant(_, _, _) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<'a> From<ExprHash<'a>> for AstPklValue<'a> {

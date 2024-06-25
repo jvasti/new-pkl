@@ -50,12 +50,14 @@ pub enum PklValue<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct PklTable<'a> {
     pub variables: HashMap<&'a str, PklValue<'a>>,
+    imports: Vec<String>,
 }
 
 impl<'a> PklTable<'a> {
     pub fn new() -> Self {
         Self {
             variables: HashMap::new(),
+            imports: vec![],
         }
     }
 
@@ -256,12 +258,22 @@ impl<'a> PklTable<'a> {
 pub fn ast_to_table<'a>(ast: Vec<PklStatement<'a>>) -> PklResult<PklTable<'a>> {
     let mut table = PklTable::new();
 
+    let mut in_body = false;
+
     for statement in ast {
         match statement {
             PklStatement::Constant(name, expr, _) => {
+                in_body = true;
                 table.insert(name, table.evaluate(expr)?);
             }
             PklStatement::Import(value, local_name, rng) => {
+                if in_body {
+                    return Err((
+                        "Import statements must be before document body".to_owned(),
+                        rng,
+                    ));
+                }
+
                 // it does not import for the moment, issue with lifetimes
                 table.import(value, rng)?;
             }
