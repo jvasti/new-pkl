@@ -2,7 +2,9 @@ use new_pkl::{Pkl, PklResult};
 use std::time::Instant;
 
 fn main() -> PklResult<()> {
-    let src = "`Hello` = \"hello\"
+    let src = "import \"test.pkl\"
+
+`Hello` = \"hello\"
 test = 222_333.3e-4
 b = true
 octal = 0o1_237

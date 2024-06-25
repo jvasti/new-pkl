@@ -1,4 +1,4 @@
-use crate::lexer::PklToken;
+use crate::{lexer::PklToken, parse_identifier, parse_string};
 use logos::{Lexer, Span};
 use std::ops::{Deref, DerefMut, Range};
 
@@ -27,7 +27,13 @@ pub type ExprHash<'a> = (HashMap<&'a str, PklExpr<'a>>, Range<usize>);
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklStatement<'a> {
+    /// A constant/variable statement
     Constant(&'a str, PklExpr<'a>, Range<usize>),
+
+    /// Am import statement:
+    /// - name: &str
+    /// - local name: Option<&str>
+    Import(&'a str, Option<&'a str>, Range<usize>),
 }
 /* ANCHOR_END: statements */
 
@@ -124,6 +130,7 @@ impl<'a> Deref for PklStatement<'a> {
     fn deref(&self) -> &Self::Target {
         match self {
             PklStatement::Constant(_, value, _) => value,
+            PklStatement::Import(_, _, _) => unreachable!(),
         }
     }
 }
@@ -131,6 +138,7 @@ impl<'a> DerefMut for PklStatement<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             PklStatement::Constant(_, value, _) => value,
+            PklStatement::Import(_, _, _) => unreachable!(),
         }
     }
 }
@@ -138,6 +146,7 @@ impl<'a> PklStatement<'a> {
     pub fn span(&self) -> Range<usize> {
         match self {
             PklStatement::Constant(_, _, rng) => rng.clone(),
+            PklStatement::Import(_, _, rng) => rng.clone(),
         }
     }
 }
@@ -187,6 +196,48 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                 let statement = parse_const(lexer, id)?;
                 statements.push(statement);
                 is_newline = false;
+            }
+            Ok(PklToken::Import) => {
+                if !is_newline {
+                    return Err((
+                        "unexpected token here (context: global), expected newline".to_owned(),
+                        lexer.span(),
+                    ));
+                }
+                let statement = parse_import(lexer)?;
+                statements.push(statement);
+                is_newline = false;
+            }
+            Ok(PklToken::As) => {
+                if let Some(PklStatement::Import(_, optional_name, rng)) = statements.last_mut() {
+                    match optional_name {
+                        None => {
+                            fn optional_id<'a>(
+                                lexer: &mut Lexer<'a, PklToken<'a>>,
+                            ) -> PklResult<(&'a str, Range<usize>)> {
+                                parse_identifier!(lexer, "unexpected token here, expected an identifier (context: import)")
+                            }
+
+                            let (other_name, other_rng) = optional_id(lexer)?;
+                            let start = rng.start;
+                            let end = other_rng.end;
+                            *rng = start..end;
+                            *optional_name = Some(other_name);
+                        }
+                        Some(_) => {
+                            return Err((
+                                "Import statement already has an 'as' close (context: import)"
+                                    .to_owned(),
+                                lexer.span(),
+                            ))
+                        }
+                    }
+                } else {
+                    return Err((
+                        "unexpected token here (context: global)".to_owned(),
+                        lexer.span(),
+                    ));
+                }
             }
             Ok(PklToken::OpenBrace) => {
                 if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
@@ -401,6 +452,23 @@ fn parse_const<'a>(
     Ok(PklStatement::Constant(name, value, start..end))
 }
 /* ANCHOR_END: const */
+
+/// Function called after 'import' keyword.
+fn parse_import<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklStatement<'a>> {
+    let start = lexer.span().start;
+
+    fn parse_value<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<(&'a str, Range<usize>)> {
+        parse_string!(
+            lexer,
+            "unexpected token here, expected an import value (context: import)",
+            "Missing import value"
+        )
+    }
+
+    let (value, rng) = parse_value(lexer)?;
+
+    return Ok(PklStatement::Import(value, None, start..rng.end));
+}
 
 /* ANCHOR: const_expr */
 /// Parse a token stream into a Pkl Expr after an identifier.

@@ -1,5 +1,8 @@
-use crate::parser::{AstPklValue, ExprHash, PklExpr, PklResult, PklStatement};
-use std::ops::Range;
+use crate::{
+    parser::{AstPklValue, ExprHash, PklExpr, PklResult, PklStatement},
+    Pkl,
+};
+use std::{fs, ops::Range};
 
 #[cfg(feature = "hashbrown_support")]
 use hashbrown::Hashmap as HashMap;
@@ -112,6 +115,35 @@ impl<'a> PklTable<'a> {
     /// or `None` if the variable is not found.
     pub fn get(&self, name: &'a str) -> Option<&PklValue<'a>> {
         self.variables.get(name)
+    }
+
+    pub fn import(&mut self, name: &'a str, rng: Range<usize>) -> PklResult<()> {
+        match name {
+            name if name.starts_with("package://") => {
+                return Err(("Package imports not yet supported!".to_owned(), rng))
+            }
+            name if name.starts_with("pkl:") => {
+                return Err((
+                    "Pkl official packages imports not yet supported!".to_owned(),
+                    rng,
+                ))
+            }
+            name if name.starts_with("https://") => {
+                return Err(("Web imports not yet supported!".to_owned(), rng))
+            }
+            file_name => {
+                let file_content = fs::read_to_string(file_name)
+                    .map_err(|e| (format!("Error reading {file_name}: {}", e.to_string()), rng))?;
+
+                let mut pkl = Pkl::new();
+                pkl.parse(&file_content)?;
+                let hash = pkl.table.variables.to_owned();
+
+                println!("{:?}", hash);
+            }
+        };
+
+        return Ok(());
     }
 
     /// Evaluates an expression in the current context.
@@ -228,6 +260,10 @@ pub fn ast_to_table<'a>(ast: Vec<PklStatement<'a>>) -> PklResult<PklTable<'a>> {
         match statement {
             PklStatement::Constant(name, expr, _) => {
                 table.insert(name, table.evaluate(expr)?);
+            }
+            PklStatement::Import(value, local_name, rng) => {
+                // it does not import for the moment, issue with lifetimes
+                table.import(value, rng)?;
             }
         }
     }

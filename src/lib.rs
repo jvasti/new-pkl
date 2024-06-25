@@ -6,6 +6,7 @@ use table::{ast_to_table, PklTable};
 mod lexer;
 mod parser;
 mod table;
+mod utils;
 
 pub use parser::PklResult;
 pub use table::PklValue;
@@ -14,6 +15,7 @@ pub use table::PklValue;
 /// The `Pkl` struct represents the main interface for working with PKL data.
 pub struct Pkl<'a> {
     table: PklTable<'a>,
+    imports: String,
 }
 
 impl<'a> Pkl<'a> {
@@ -21,6 +23,7 @@ impl<'a> Pkl<'a> {
     pub fn new() -> Self {
         Self {
             table: PklTable::new(),
+            imports: String::new(),
         }
     }
 
@@ -40,6 +43,14 @@ impl<'a> Pkl<'a> {
         Ok(())
     }
 
+    pub fn parse_import(&'a mut self) -> PklResult<()> {
+        let x = self.imports.as_str();
+        let parsed = self.generate_ast(x)?;
+        self.table.extends(ast_to_table(parsed)?);
+
+        Ok(())
+    }
+
     /// Generates an AST from a PKL source string.
     ///
     /// # Arguments
@@ -49,7 +60,7 @@ impl<'a> Pkl<'a> {
     /// # Returns
     ///
     /// A `PklResult` containing the generated AST or an error message.
-    pub fn generate_ast(&mut self, source: &'a str) -> PklResult<Vec<PklStatement<'a>>> {
+    pub fn generate_ast(&self, source: &'a str) -> PklResult<Vec<PklStatement<'a>>> {
         use logos::Logos;
         let mut lexer = PklToken::lexer(source);
         parse_pkl(&mut lexer)

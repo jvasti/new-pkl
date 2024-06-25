@@ -36,6 +36,10 @@ pub enum PklToken<'a> {
     Comma,
     #[token("new")]
     New,
+    #[token("import")]
+    Import,
+    #[token("as")]
+    As,
 
     #[regex(r"-?\d+(?:_?\d)*", |lex| {
         let raw = lex.slice();
