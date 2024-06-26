@@ -29,9 +29,12 @@ bird {
   }
 }
 
+DATA = bird.taxonomy.species
+
 int = 3
 duration = int.min
 datasize = int.gb
+x = 3.4e2.ms
 
 pigeon {
   name = \"Turtle dove\"

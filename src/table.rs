@@ -205,7 +205,16 @@ impl<'a> PklTable<'a> {
                             return Ok(PklValue::DataSize(Byte::from_value_and_unit(float, unit)));
                         }
                     }
-                    PklValue::Object(hashmap) => {}
+                    PklValue::Object(hashmap) => {
+                        if let Some(data) = hashmap.get(value) {
+                            return Ok(data.to_owned());
+                        } else {
+                            return Err((
+                                format!("Object does not possess a '{value}' field"),
+                                range,
+                            ));
+                        }
+                    }
                     _ => {
                         return Err((
                             format!("Indexing of value '{:?}' not yet supported", base),
