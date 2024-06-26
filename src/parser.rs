@@ -266,7 +266,7 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                 }
             }
             Ok(PklToken::Dot) => {
-                if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
+                if let Some(PklStatement::Constant(_, value, _)) = statements.last_mut() {
                     fn parse_id<'a>(
                         lexer: &mut Lexer<'a, PklToken<'a>>,
                     ) -> PklResult<Identifier<'a>> {

@@ -167,9 +167,9 @@ impl<'a> Pkl<'a> {
     /// # Returns
     ///
     /// A `PklResult` containing the string value or an error message if not found or wrong type.
-    pub fn get_string(&self, name: &'a str) -> PklResult<&'a str> {
+    pub fn get_string(&self, name: &'a str) -> PklResult<String> {
         match self.table.get(name) {
-            Some(PklValue::String(s)) | Some(PklValue::MultiLineString(s)) => Ok(*s),
+            Some(PklValue::String(s)) => Ok(s.to_owned()),
             Some(_) => Err((format!("Variable `{}` is not a string", name), 0..0)),
             None => Err((format!("Variable `{}` not found", name), 0..0)),
         }

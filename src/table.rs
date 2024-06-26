@@ -3,8 +3,11 @@ use crate::{
     Pkl,
 };
 use data_size::Byte;
-use duration::duration_from_value_and_unit;
-use std::{fs, ops::Range, time::Duration};
+use duration::Duration;
+use float_api::match_float_props_api;
+use int_api::match_int_props_api;
+use std::{fs, ops::Range};
+use string_api::match_string_props_api;
 
 #[cfg(feature = "hashbrown_support")]
 use hashbrown::Hashmap as HashMap;
@@ -13,6 +16,9 @@ use std::collections::HashMap;
 
 pub mod data_size;
 pub mod duration;
+mod float_api;
+mod int_api;
+mod string_api;
 
 /// Represents a value in the PKL format.
 ///
@@ -40,10 +46,16 @@ pub enum PklValue<'a> {
     Int(i64),
 
     /// A single-line string.
-    String(&'a str),
+    ///
+    /// String are String and not &str
+    /// because we may need to manipulate and modify them.
+    String(String),
 
-    /// A multiline string.
-    MultiLineString(&'a str),
+    /// An character.
+    Char(char),
+
+    /// A List
+    List(Vec<PklValue<'a>>),
 
     /// A nested object represented as a hashmap of key-value pairs.
     Object(HashMap<&'a str, PklValue<'a>>),
@@ -52,10 +64,10 @@ pub enum PklValue<'a> {
     ClassInstance(&'a str, HashMap<&'a str, PklValue<'a>>),
 
     /// A duration
-    Duration(Duration),
+    Duration(Duration<'a>),
 
     // A datasize
-    DataSize(Byte),
+    DataSize(Byte<'a>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -178,43 +190,22 @@ impl<'a> PklTable<'a> {
             PklExpr::Value(value) => self.evaluate_value(value),
             PklExpr::MemberExpression(base_expr, indexor, range) => {
                 let base = self.evaluate(*base_expr)?;
-                let value = indexor.value();
+                let property = indexor.value();
 
                 match base {
-                    PklValue::Int(int) => {
-                        if let Some(unit) = duration::Unit::from_str(value) {
-                            return Ok(PklValue::Duration(duration_from_value_and_unit(
-                                int as f64, unit,
-                            )));
-                        }
-
-                        if let Some(unit) = data_size::Unit::from_str(value) {
-                            return Ok(PklValue::DataSize(Byte::from_value_and_unit(
-                                int as f64, unit,
-                            )));
-                        }
-                    }
-                    PklValue::Float(float) => {
-                        if let Some(unit) = duration::Unit::from_str(value) {
-                            return Ok(PklValue::Duration(duration_from_value_and_unit(
-                                float, unit,
-                            )));
-                        }
-
-                        if let Some(unit) = data_size::Unit::from_str(value) {
-                            return Ok(PklValue::DataSize(Byte::from_value_and_unit(float, unit)));
-                        }
-                    }
+                    PklValue::Int(int) => return match_int_props_api(int, property, range),
+                    PklValue::Float(float) => return match_float_props_api(float, property, range),
                     PklValue::Object(hashmap) => {
-                        if let Some(data) = hashmap.get(value) {
+                        if let Some(data) = hashmap.get(&property) {
                             return Ok(data.to_owned());
                         } else {
                             return Err((
-                                format!("Object does not possess a '{value}' field"),
+                                format!("Object does not possess a '{property}' field"),
                                 range,
                             ));
                         }
                     }
+                    PklValue::String(s) => return match_string_props_api(&s, property, range),
                     _ => {
                         return Err((
                             format!("Indexing of value '{:?}' not yet supported", base),
@@ -222,8 +213,6 @@ impl<'a> PklTable<'a> {
                         ))
                     }
                 };
-
-                todo!()
             }
         }
     }
@@ -242,8 +231,9 @@ impl<'a> PklTable<'a> {
             AstPklValue::Bool(b, _) => PklValue::Bool(b),
             AstPklValue::Float(f, _) => PklValue::Float(f),
             AstPklValue::Int(i, _) => PklValue::Int(i),
-            AstPklValue::String(s, _) => PklValue::String(s),
-            AstPklValue::MultiLineString(s, _) => PklValue::MultiLineString(s),
+            AstPklValue::String(s, _) | AstPklValue::MultiLineString(s, _) => {
+                PklValue::String(s.to_owned())
+            }
             AstPklValue::Object(o) => self.evaluate_object(o)?,
             AstPklValue::ClassInstance(a, b, _) => self.evaluate_class_instance(a, b)?,
             AstPklValue::AmendedObject(a, b, _) => self.evaluate_amended_object(a, b)?,

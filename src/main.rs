@@ -35,7 +35,7 @@ int = 3
 duration = int.min
 datasize = int.gb
 x = 3.4e2.ms
-
+two = -2.ms
 pigeon {
   name = \"Turtle dove\"
   extinct = false

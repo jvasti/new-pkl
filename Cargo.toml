@@ -14,6 +14,7 @@ categories = ["parsing"]
 [dependencies]
 logos = "0.14.0"
 hashbrown = { version = "0.14.5", optional = true }
+base64 = "0.22.1"
 
 
 [features]
