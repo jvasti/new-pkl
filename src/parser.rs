@@ -208,6 +208,10 @@ impl<'a> AstPklValue<'a> {
     }
 }
 
+fn parse_basic_id<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Identifier<'a>> {
+    parse_identifier!(lexer)
+}
+
 /* ANCHOR: statement */
 /// Parse a token stream into a Pkl statement.
 pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklStatement<'a>>> {
@@ -271,12 +275,7 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
             }
             Ok(PklToken::Dot) => {
                 if let Some(PklStatement::Constant(_, value, _)) = statements.last_mut() {
-                    fn parse_id<'a>(
-                        lexer: &mut Lexer<'a, PklToken<'a>>,
-                    ) -> PklResult<Identifier<'a>> {
-                        parse_identifier!(lexer)
-                    }
-                    let identifier = parse_id(lexer)?;
+                    let identifier = parse_basic_id(lexer)?;
                     let expr_start = value.span().start;
                     let expr_end = identifier.span().end;
 
@@ -419,6 +418,37 @@ fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
             Some(Ok(PklToken::CloseParen)) => {
                 let end = lexer.span().end;
                 return Ok(PklExpr::Value(AstPklValue::List(values, start..end)));
+            }
+            Some(Ok(PklToken::Dot)) if is_comma => {
+                if let Some(last) = values.last_mut() {
+                    let identifier = parse_basic_id(lexer)?;
+                    let expr_start = last.span().start;
+                    let expr_end = identifier.span().end;
+
+                    match last {
+                        PklExpr::Identifier(_) => {
+                            *last = PklExpr::MemberExpression(
+                                Box::new(last.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
+                        }
+                        PklExpr::Value(_) => {
+                            *last = PklExpr::MemberExpression(
+                                Box::new(last.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
+                        }
+                        PklExpr::MemberExpression(_, _, _) => {
+                            *last = PklExpr::MemberExpression(
+                                Box::new(last.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
+                        }
+                    }
+                }
             }
 
             Some(Ok(PklToken::Space))
