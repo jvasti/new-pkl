@@ -253,6 +253,7 @@ impl<'a> PklTable<'a> {
             AstPklValue::Bool(b, _) => PklValue::Bool(b),
             AstPklValue::Float(f, _) => PklValue::Float(f),
             AstPklValue::Int(i, _) => PklValue::Int(i),
+            AstPklValue::Null(_) => PklValue::Null,
             AstPklValue::String(s, _) | AstPklValue::MultiLineString(s, _) => {
                 PklValue::String(s.to_owned())
             }

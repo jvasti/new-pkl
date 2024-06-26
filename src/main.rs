@@ -2,7 +2,7 @@ use new_pkl::{Pkl, PklResult};
 use std::time::Instant;
 
 fn main() -> Result<(), (String, String)> {
-    let src = "import \"test.pkl\"
+    let src = "//import \"test.pkl\"
 
 `Hello` = \"hello\"
 test = 222_333.3e-4
@@ -78,7 +78,7 @@ list_with_values = List(pigeon, int, duration, two, list, List(), pigeon.lifespa
         src.len()
     );
 
-    println!("{:?}", pkl);
+    // println!("{:?}", pkl);
 
     Ok(())
 }

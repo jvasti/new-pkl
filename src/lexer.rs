@@ -42,6 +42,8 @@ pub enum PklToken<'a> {
     As,
     #[token(".")]
     Dot,
+    #[token("null")]
+    Null,
 
     #[regex(r"-?\d+(?:_?\d)*", |lex| {
         let raw = lex.slice();

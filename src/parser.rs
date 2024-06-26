@@ -92,6 +92,8 @@ impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AstPklValue<'a> {
+    Null(Range<usize>),
+
     /// true or false.
     Bool(bool, Range<usize>),
     /// Any floating point number.
@@ -203,7 +205,8 @@ impl<'a> AstPklValue<'a> {
             | AstPklValue::ClassInstance(_, _, rng)
             | AstPklValue::String(_, rng)
             | AstPklValue::List(_, rng)
-            | AstPklValue::MultiLineString(_, rng) => rng.clone(),
+            | AstPklValue::MultiLineString(_, rng)
+            | AstPklValue::Null(rng) => rng.clone(),
         }
     }
 }
@@ -212,10 +215,9 @@ fn parse_basic_id<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Identifi
     parse_identifier!(lexer)
 }
 
-/* ANCHOR: statement */
 /// Parse a token stream into a Pkl statement.
 pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklStatement<'a>>> {
-    let mut statements = vec![];
+    let mut statements = Vec::with_capacity(16); // Assuming typical file size for preallocation
     let mut is_newline = true;
 
     while let Some(token) = lexer.next() {
@@ -244,27 +246,25 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
             }
             Ok(PklToken::As) => {
                 if let Some(PklStatement::Import(_, optional_name, rng)) = statements.last_mut() {
-                    match optional_name {
-                        None => {
-                            fn optional_id<'a>(
-                                lexer: &mut Lexer<'a, PklToken<'a>>,
-                            ) -> PklResult<Identifier<'a>> {
-                                parse_identifier!(lexer, "unexpected token here, expected an identifier (context: import)")
-                            }
+                    if optional_name.is_none() {
+                        fn optional_id<'a>(
+                            lexer: &mut Lexer<'a, PklToken<'a>>,
+                        ) -> PklResult<Identifier<'a>> {
+                            parse_identifier!(
+                                lexer,
+                                "unexpected token here, expected an identifier (context: import)"
+                            )
+                        }
 
-                            let Identifier(other_name, other_rng) = optional_id(lexer)?;
-                            let start = rng.start;
-                            let end = other_rng.end;
-                            *rng = start..end;
-                            *optional_name = Some(other_name);
-                        }
-                        Some(_) => {
-                            return Err((
-                                "Import statement already has an 'as' close (context: import)"
-                                    .to_owned(),
-                                lexer.span(),
-                            ))
-                        }
+                        let Identifier(other_name, other_rng) = optional_id(lexer)?;
+                        *rng = rng.start..other_rng.end;
+                        *optional_name = Some(other_name);
+                    } else {
+                        return Err((
+                            "Import statement already has an 'as' close (context: import)"
+                                .to_owned(),
+                            lexer.span(),
+                        ));
                     }
                 } else {
                     return Err((
@@ -279,29 +279,11 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                     let expr_start = value.span().start;
                     let expr_end = identifier.span().end;
 
-                    match value {
-                        PklExpr::Identifier(_) => {
-                            *value = PklExpr::MemberExpression(
-                                Box::new(value.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
-                        PklExpr::Value(_) => {
-                            *value = PklExpr::MemberExpression(
-                                Box::new(value.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
-                        PklExpr::MemberExpression(_, _, _) => {
-                            *value = PklExpr::MemberExpression(
-                                Box::new(value.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
-                    }
+                    *value = PklExpr::MemberExpression(
+                        Box::new(value.clone()),
+                        identifier,
+                        expr_start..expr_end,
+                    );
                 } else {
                     return Err((
                         "unexpected token here (context: global)".to_owned(),
@@ -312,24 +294,23 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
             Ok(PklToken::OpenBrace) => {
                 if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
                     match value {
-                        PklExpr::Value(AstPklValue::Object((_, _)))
+                        PklExpr::Value(AstPklValue::Object(_))
                         | PklExpr::Value(AstPklValue::AmendingObject(_, _, _))
                         | PklExpr::Value(AstPklValue::AmendedObject(_, _, _)) => {
-                            let new_object = parse_object(lexer)?;
-                            let start = rng.start;
-                            let end = new_object.1.end;
+                            let (new_object, object_span) = parse_object(lexer)?;
+                            let end = object_span.end;
                             *value = AstPklValue::AmendedObject(
                                 Box::new(value.clone().extract_value()),
-                                new_object,
-                                start..end,
+                                (new_object, object_span),
+                                rng.start..end,
                             )
-                            .into()
+                            .into();
                         }
                         _ => {
                             return Err((
                                 "unexpected token here (context: global)".to_owned(),
                                 lexer.span(),
-                            ))
+                            ));
                         }
                     }
                 } else {
@@ -355,165 +336,142 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                 return Err((
                     "unexpected token here (context: statement)".to_owned(),
                     lexer.span(),
-                ))
+                ));
             }
         }
     }
 
     Ok(statements)
 }
-/* ANCHOR_END: statement */
 
 fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>> {
-    loop {
-        match lexer.next() {
-            Some(Ok(PklToken::Bool(b))) => return Ok(AstPklValue::Bool(b, lexer.span()).into()),
-            Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
+    while let Some(token) = lexer.next() {
+        match token {
+            Ok(PklToken::Bool(b)) => return Ok(AstPklValue::Bool(b, lexer.span()).into()),
+            Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
                 return Ok(PklExpr::Identifier(Identifier(id, lexer.span())))
             }
-            Some(Ok(PklToken::New)) => return parse_class_instance(lexer),
-            Some(Ok(PklToken::FunctionCall(fn_name))) => {
-                match fn_name {
-                    "List" => return parse_list(lexer),
-                    _ => unreachable!("Cannot do it"),
-                }
-                todo!()
-            }
-
-            Some(Ok(PklToken::Int(i)))
-            | Some(Ok(PklToken::OctalInt(i)))
-            | Some(Ok(PklToken::HexInt(i)))
-            | Some(Ok(PklToken::BinaryInt(i))) => {
-                return Ok(AstPklValue::Int(i, lexer.span()).into())
-            }
-            Some(Ok(PklToken::Float(f))) => return Ok(AstPklValue::Float(f, lexer.span()).into()),
-            Some(Ok(PklToken::String(s))) => return Ok(AstPklValue::String(s, lexer.span()).into()),
-            Some(Ok(PklToken::MultiLineString(s))) => {
+            Ok(PklToken::New) => return parse_class_instance(lexer),
+            Ok(PklToken::FunctionCall(fn_name)) => match fn_name {
+                "List" => return parse_list(lexer),
+                _ => unreachable!("Cannot do it"),
+            },
+            Ok(PklToken::Null) => return Ok(AstPklValue::Null(lexer.span()).into()),
+            Ok(PklToken::Int(i))
+            | Ok(PklToken::OctalInt(i))
+            | Ok(PklToken::HexInt(i))
+            | Ok(PklToken::BinaryInt(i)) => return Ok(AstPklValue::Int(i, lexer.span()).into()),
+            Ok(PklToken::Float(f)) => return Ok(AstPklValue::Float(f, lexer.span()).into()),
+            Ok(PklToken::String(s)) => return Ok(AstPklValue::String(s, lexer.span()).into()),
+            Ok(PklToken::MultiLineString(s)) => {
                 return Ok(AstPklValue::MultiLineString(s, lexer.span()).into())
             }
-            Some(Ok(PklToken::OpenParen)) => return Ok(parse_amended_object(lexer)?.into()),
-            Some(Ok(PklToken::Space))
-            | Some(Ok(PklToken::NewLine))
-            | Some(Ok(PklToken::DocComment(_)))
-            | Some(Ok(PklToken::LineComment(_)))
-            | Some(Ok(PklToken::MultilineComment(_))) => continue,
-            Some(Err(e)) => return Err((e.to_string(), lexer.span())),
-            Some(_) => return Err(("unexpected token here".to_owned(), lexer.span())),
-            None => return Err(("empty expressions are not allowed".to_owned(), lexer.span())),
+            Ok(PklToken::OpenParen) => return Ok(parse_amended_object(lexer)?.into()),
+            Ok(PklToken::Space)
+            | Ok(PklToken::NewLine)
+            | Ok(PklToken::DocComment(_))
+            | Ok(PklToken::LineComment(_))
+            | Ok(PklToken::MultilineComment(_)) => continue,
+            Err(e) => return Err((e.to_string(), lexer.span())),
+            _ => return Err(("unexpected token here".to_owned(), lexer.span())),
         }
     }
+    Err(("empty expressions are not allowed".to_owned(), lexer.span()))
 }
 
 fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>> {
     let start = lexer.span().start;
-    let mut values: Vec<PklExpr> = Vec::new();
+    let mut values: Vec<PklExpr> = Vec::with_capacity(5);
     let mut is_comma = true;
 
     loop {
         match lexer.next() {
-            Some(Ok(PklToken::Dot)) if !is_comma => {
-                if let Some(last) = values.last_mut() {
-                    let identifier = parse_basic_id(lexer)?;
-                    let expr_start = last.span().start;
-                    let expr_end = identifier.span().end;
+            Some(Ok(token)) => match token {
+                PklToken::Dot if !is_comma => {
+                    if let Some(last) = values.last_mut() {
+                        let identifier = parse_basic_id(lexer)?;
+                        let expr_start = last.span().start;
+                        let expr_end = identifier.span().end;
 
-                    match last {
-                        PklExpr::Identifier(_) => {
-                            *last = PklExpr::MemberExpression(
-                                Box::new(last.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
-                        PklExpr::Value(_) => {
-                            *last = PklExpr::MemberExpression(
-                                Box::new(last.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
-                        PklExpr::MemberExpression(_, _, _) => {
-                            *last = PklExpr::MemberExpression(
-                                Box::new(last.clone()),
-                                identifier,
-                                expr_start..expr_end,
-                            )
-                        }
+                        *last = PklExpr::MemberExpression(
+                            Box::new(last.clone()),
+                            identifier,
+                            expr_start..expr_end,
+                        );
+                    } else {
+                        return Err(("unexpected token '.'".to_owned(), lexer.span()));
                     }
-                } else {
-                    return Err(("unexpected token '.'".to_owned(), lexer.span()));
                 }
-            }
-            Some(Ok(PklToken::Comma)) if !is_comma => {
-                is_comma = true;
-                continue;
-            }
-            Some(Ok(PklToken::CloseParen)) => {
-                let end = lexer.span().end;
-                return Ok(PklExpr::Value(AstPklValue::List(values, start..end)));
-            }
-
-            Some(Ok(PklToken::Space))
-            | Some(Ok(PklToken::NewLine))
-            | Some(Ok(PklToken::DocComment(_)))
-            | Some(Ok(PklToken::LineComment(_)))
-            | Some(Ok(PklToken::MultilineComment(_))) => continue,
+                PklToken::Comma if !is_comma => {
+                    is_comma = true;
+                }
+                PklToken::CloseParen => {
+                    let end = lexer.span().end;
+                    return Ok(PklExpr::Value(AstPklValue::List(values.into(), start..end)));
+                }
+                PklToken::Space
+                | PklToken::NewLine
+                | PklToken::DocComment(_)
+                | PklToken::LineComment(_)
+                | PklToken::MultilineComment(_) => {}
+                PklToken::Bool(b) if is_comma => {
+                    values.push(AstPklValue::Bool(b, lexer.span()).into());
+                    is_comma = false;
+                }
+                PklToken::Identifier(id) | PklToken::IllegalIdentifier(id) if is_comma => {
+                    values.push(PklExpr::Identifier(Identifier(id, lexer.span())));
+                    is_comma = false;
+                }
+                PklToken::New if is_comma => {
+                    values.push(parse_class_instance(lexer)?);
+                    is_comma = false;
+                }
+                PklToken::FunctionCall(fn_name) if is_comma => {
+                    if fn_name == "List" {
+                        values.push(parse_list(lexer)?);
+                    } else {
+                        return Err(("unexpected function name".to_owned(), lexer.span()));
+                    }
+                    is_comma = false;
+                }
+                PklToken::Int(i)
+                | PklToken::OctalInt(i)
+                | PklToken::HexInt(i)
+                | PklToken::BinaryInt(i)
+                    if is_comma =>
+                {
+                    values.push(AstPklValue::Int(i, lexer.span()).into());
+                    is_comma = false;
+                }
+                PklToken::Float(f) if is_comma => {
+                    values.push(AstPklValue::Float(f, lexer.span()).into());
+                    is_comma = false;
+                }
+                PklToken::String(s) if is_comma => {
+                    values.push(AstPklValue::String(s, lexer.span()).into());
+                    is_comma = false;
+                }
+                PklToken::MultiLineString(s) if is_comma => {
+                    values.push(AstPklValue::MultiLineString(s, lexer.span()).into());
+                    is_comma = false;
+                }
+                _ => return Err(("unexpected token here".to_owned(), lexer.span())),
+            },
             Some(Err(e)) => return Err((e.to_string(), lexer.span())),
             None => return Err(("Missing list close parenthesis".to_owned(), lexer.span())),
-
-            // expression
-            token if is_comma => {
-                match token {
-                    Some(Ok(PklToken::Bool(b))) => {
-                        values.push(AstPklValue::Bool(b, lexer.span()).into())
-                    }
-                    Some(Ok(PklToken::Identifier(id)))
-                    | Some(Ok(PklToken::IllegalIdentifier(id))) => {
-                        values.push(PklExpr::Identifier(Identifier(id, lexer.span())))
-                    }
-                    Some(Ok(PklToken::New)) => values.push(parse_class_instance(lexer)?),
-                    Some(Ok(PklToken::FunctionCall(fn_name))) => match fn_name {
-                        "List" => values.push(parse_list(lexer)?),
-                        _ => unreachable!("Function parsing not yet supported!"),
-                    },
-
-                    Some(Ok(PklToken::Int(i)))
-                    | Some(Ok(PklToken::OctalInt(i)))
-                    | Some(Ok(PklToken::HexInt(i)))
-                    | Some(Ok(PklToken::BinaryInt(i))) => {
-                        values.push(AstPklValue::Int(i, lexer.span()).into())
-                    }
-                    Some(Ok(PklToken::Float(f))) => {
-                        values.push(AstPklValue::Float(f, lexer.span()).into())
-                    }
-                    Some(Ok(PklToken::String(s))) => {
-                        values.push(AstPklValue::String(s, lexer.span()).into())
-                    }
-                    Some(Ok(PklToken::MultiLineString(s))) => {
-                        values.push(AstPklValue::MultiLineString(s, lexer.span()).into())
-                    }
-                    _ => return Err(("unexpected token here".to_owned(), lexer.span())),
-                }
-
-                is_comma = false
-            }
-
-            _ => return Err(("unexpected token here".to_owned(), lexer.span())),
         }
     }
 }
 
-/* ANCHOR: object */
-/// Parse a token stream into a Pkl object.
 fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<ExprHash<'a>> {
     let start = lexer.span().start;
-    let mut hashmap = HashMap::new();
-    let mut is_newline = true;
+    let mut hashmap = HashMap::with_capacity(8); // Assuming typical small object size
+    let mut expect_new_entry = true;
 
     while let Some(token) = lexer.next() {
         match token {
             Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
-                if !is_newline {
+                if !expect_new_entry {
                     return Err((
                         "unexpected token here (context: object), expected newline or comma"
                             .to_owned(),
@@ -522,24 +480,18 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<ExprHash<'
                 }
 
                 let value = parse_const_expr(lexer)?;
-
-                is_newline = matches!(value, PklExpr::Value(AstPklValue::Object((_, _))));
-
+                expect_new_entry = matches!(value, PklExpr::Value(AstPklValue::Object((_, _))));
                 hashmap.insert(id, value);
             }
             Ok(PklToken::NewLine) | Ok(PklToken::Comma) => {
-                is_newline = true;
+                expect_new_entry = true;
             }
-            Ok(PklToken::Space) => {
-                // Skip spaces
-            }
+            Ok(PklToken::Space) => {}
             Ok(PklToken::CloseBrace) => {
                 let end = lexer.span().end;
                 return Ok((hashmap, start..end));
             }
-            Err(e) => {
-                return Err((e.to_string(), lexer.span()));
-            }
+            Err(e) => return Err((e.to_string(), lexer.span())),
             _ => {
                 return Err((
                     "unexpected token here (context: object)".to_owned(),
@@ -551,22 +503,19 @@ fn parse_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<ExprHash<'
 
     Err(("Missing object close brace".to_owned(), lexer.span()))
 }
-/* ANCHOR_END: object */
 
 fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<AstPklValue<'a>> {
     let start = lexer.span().start;
 
     let amended_object_name = match lexer.next() {
         Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
-            match lexer.next() {
-                Some(Ok(PklToken::CloseParen)) => id,
-                Some(Err(e)) => return Err((e.to_string(), lexer.span())),
-                _ => {
-                    return Err((
-                        "expected close parenthesis (context: amended_object)".to_owned(),
-                        lexer.span(),
-                    ))
-                }
+            if let Some(Ok(PklToken::CloseParen)) = lexer.next() {
+                id
+            } else {
+                return Err((
+                    "expected close parenthesis (context: amended_object)".to_owned(),
+                    lexer.span(),
+                ));
             }
         }
         Some(Err(e)) => return Err((e.to_string(), lexer.span())),
@@ -574,7 +523,7 @@ fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<As
             return Err((
                 "expected identifier here (context: amended_object)".to_owned(),
                 lexer.span(),
-            ))
+            ));
         }
     };
 
@@ -584,7 +533,6 @@ fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<As
             Ok(PklToken::OpenBrace) => {
                 let object = parse_object(lexer)?;
                 let end = lexer.span().end;
-
                 return Ok(AstPklValue::AmendingObject(
                     amended_object_name,
                     object,
@@ -596,7 +544,7 @@ fn parse_amended_object<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<As
                 return Err((
                     "expected open brace here (context: amended_object)".to_owned(),
                     lexer.span(),
-                ))
+                ));
             }
         }
     }
