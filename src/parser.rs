@@ -49,13 +49,27 @@ impl<'a> Identifier<'a> {
     }
 }
 
-/* ANCHOR: expression */
-/// Represent any valid Pkl expression.
+#[derive(Debug, PartialEq, Clone)]
+pub struct FuncCall<'a>(pub Identifier<'a>, pub Vec<PklExpr<'a>>, pub Range<usize>);
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ExprMember<'a> {
+    Identifier(Identifier<'a>),
+    FuncCall(FuncCall<'a>),
+}
+
+impl<'a> From<Identifier<'a>> for ExprMember<'a> {
+    fn from(value: Identifier<'a>) -> Self {
+        ExprMember::Identifier(value)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklExpr<'a> {
     Identifier(Identifier<'a>),
     Value(AstPklValue<'a>),
-    MemberExpression(Box<PklExpr<'a>>, Identifier<'a>, Range<usize>),
+    MemberExpression(Box<PklExpr<'a>>, ExprMember<'a>, Range<usize>),
+    FuncCall(FuncCall<'a>),
 }
 
 impl<'a> PklExpr<'a> {
@@ -72,10 +86,10 @@ impl<'a> PklExpr<'a> {
             Self::Value(v) => v.span(),
             Self::Identifier(Identifier(_, span)) => span.to_owned(),
             Self::MemberExpression(_, _, span) => span.to_owned(),
+            Self::FuncCall(FuncCall(_, _, span)) => span.to_owned(),
         }
     }
 }
-/* ANCHOR_END: expression */
 
 impl<'a> From<AstPklValue<'a>> for PklExpr<'a> {
     fn from(value: AstPklValue<'a>) -> Self {
@@ -88,7 +102,6 @@ impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
     }
 }
 
-/* ANCHOR: values */
 /// Represent any valid Pkl value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AstPklValue<'a> {
@@ -141,7 +154,6 @@ pub enum AstPklValue<'a> {
     /// ```
     AmendedObject(Box<AstPklValue<'a>>, ExprHash<'a>, Range<usize>),
 }
-/* ANCHOR_END: values */
 
 impl<'a> Deref for PklStatement<'a> {
     type Target = PklExpr<'a>;
@@ -215,6 +227,41 @@ fn parse_basic_id<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Identifi
     parse_identifier!(lexer)
 }
 
+fn parse_member_expr_member<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<ExprMember<'a>> {
+    let start = lexer.span().end;
+
+    while let Some(token) = lexer.next() {
+        match token {
+            Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
+                return Ok(Identifier(id, start..lexer.span().end).into())
+            }
+            Ok(PklToken::FunctionCall(id)) => {
+                return Ok(ExprMember::FuncCall(parse_fn_call(
+                    lexer,
+                    Identifier(id, lexer.span()),
+                )?))
+            }
+            Ok(PklToken::NewLine) | Ok(PklToken::Space) => {
+                // Skip spaces and newlines
+            }
+            Err(e) => {
+                return Err((e.to_string(), lexer.span()));
+            }
+            _ => {
+                return Err((
+                    "unexpected token, expected identifier".to_owned(),
+                    lexer.span(),
+                ));
+            }
+        }
+    }
+
+    Err((
+        "expected identifier but got nothing".to_owned(),
+        lexer.span(),
+    ))
+}
+
 /// Parse a token stream into a Pkl statement.
 pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklStatement<'a>>> {
     let mut statements = Vec::with_capacity(16); // Assuming typical file size for preallocation
@@ -281,7 +328,7 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
 
                     *value = PklExpr::MemberExpression(
                         Box::new(value.clone()),
-                        identifier,
+                        identifier.into(),
                         expr_start..expr_end,
                     );
                 } else {
@@ -352,10 +399,11 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
                 return Ok(PklExpr::Identifier(Identifier(id, lexer.span())))
             }
             Ok(PklToken::New) => return parse_class_instance(lexer),
-            Ok(PklToken::FunctionCall(fn_name)) => match fn_name {
-                "List" => return parse_list(lexer),
-                _ => unreachable!("Cannot do it"),
-            },
+            Ok(PklToken::FunctionCall(fn_name)) => {
+                let fn_call = parse_fn_call(lexer, Identifier(fn_name, lexer.span()))?;
+
+                return Ok(PklExpr::FuncCall(fn_call));
+            }
             Ok(PklToken::Null) => return Ok(AstPklValue::Null(lexer.span()).into()),
             Ok(PklToken::Int(i))
             | Ok(PklToken::OctalInt(i))
@@ -379,7 +427,10 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
     Err(("empty expressions are not allowed".to_owned(), lexer.span()))
 }
 
-fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>> {
+fn parse_fn_call<'a>(
+    lexer: &mut Lexer<'a, PklToken<'a>>,
+    id: Identifier<'a>,
+) -> PklResult<FuncCall<'a>> {
     let start = lexer.span().start;
     let mut values: Vec<PklExpr> = Vec::with_capacity(5);
     let mut is_comma = true;
@@ -395,7 +446,7 @@ fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
 
                         *last = PklExpr::MemberExpression(
                             Box::new(last.clone()),
-                            identifier,
+                            identifier.into(),
                             expr_start..expr_end,
                         );
                     } else {
@@ -407,7 +458,7 @@ fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
                 }
                 PklToken::CloseParen => {
                     let end = lexer.span().end;
-                    return Ok(PklExpr::Value(AstPklValue::List(values.into(), start..end)));
+                    return Ok(FuncCall(id, values.into(), start..end));
                 }
                 PklToken::Space
                 | PklToken::NewLine
@@ -427,11 +478,11 @@ fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
                     is_comma = false;
                 }
                 PklToken::FunctionCall(fn_name) if is_comma => {
-                    if fn_name == "List" {
-                        values.push(parse_list(lexer)?);
-                    } else {
-                        return Err(("unexpected function name".to_owned(), lexer.span()));
-                    }
+                    values.push(PklExpr::FuncCall(parse_fn_call(
+                        lexer,
+                        Identifier(fn_name, lexer.span()),
+                    )?));
+
                     is_comma = false;
                 }
                 PklToken::Int(i)

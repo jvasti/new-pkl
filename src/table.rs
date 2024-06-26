@@ -1,5 +1,7 @@
 use crate::{
-    parser::{AstPklValue, ExprHash, Identifier, PklExpr, PklResult, PklStatement},
+    parser::{
+        AstPklValue, ExprHash, ExprMember, FuncCall, Identifier, PklExpr, PklResult, PklStatement,
+    },
     Pkl,
 };
 use data_size::{match_data_size_props_api, Byte};
@@ -194,47 +196,71 @@ impl<'a> PklTable<'a> {
             PklExpr::Value(value) => self.evaluate_value(value),
             PklExpr::MemberExpression(base_expr, indexor, range) => {
                 let base = self.evaluate(*base_expr)?;
-                let property = indexor.value();
 
-                match base {
-                    PklValue::Int(int) => return match_int_props_api(int, property, range),
-                    PklValue::Float(float) => return match_float_props_api(float, property, range),
-                    PklValue::Object(hashmap) => {
-                        if let Some(data) = hashmap.get(&property) {
-                            return Ok(data.to_owned());
-                        } else {
-                            return Err((
-                                format!("Object does not possess a '{property}' field"),
-                                range,
-                            ));
-                        }
-                    }
-                    PklValue::String(s) => return match_string_props_api(&s, property, range),
-                    PklValue::ClassInstance(_class_name, hashmap) => {
-                        if let Some(data) = hashmap.get(&property) {
-                            return Ok(data.to_owned());
-                        } else {
-                            return Err((
-                                format!("Object does not possess a '{property}' field"),
-                                range,
-                            ));
-                        }
-                    }
-                    PklValue::DataSize(byte) => {
-                        return match_data_size_props_api(byte, property, range)
-                    }
-                    PklValue::Duration(duration) => {
-                        return match_duration_props_api(duration, property, range)
-                    }
-                    PklValue::List(list) => return match_list_props_api(list, property, range),
+                match indexor {
+                    ExprMember::Identifier(Identifier(property, _)) => {
+                        match base {
+                            PklValue::Int(int) => return match_int_props_api(int, property, range),
+                            PklValue::Float(float) => {
+                                return match_float_props_api(float, property, range)
+                            }
+                            PklValue::Object(hashmap) => {
+                                if let Some(data) = hashmap.get(&property) {
+                                    return Ok(data.to_owned());
+                                } else {
+                                    return Err((
+                                        format!("Object does not possess a '{property}' field"),
+                                        range,
+                                    ));
+                                }
+                            }
+                            PklValue::String(s) => {
+                                return match_string_props_api(&s, property, range)
+                            }
+                            PklValue::ClassInstance(_class_name, hashmap) => {
+                                if let Some(data) = hashmap.get(&property) {
+                                    return Ok(data.to_owned());
+                                } else {
+                                    return Err((
+                                        format!("Object does not possess a '{property}' field"),
+                                        range,
+                                    ));
+                                }
+                            }
+                            PklValue::DataSize(byte) => {
+                                return match_data_size_props_api(byte, property, range)
+                            }
+                            PklValue::Duration(duration) => {
+                                return match_duration_props_api(duration, property, range)
+                            }
+                            PklValue::List(list) => {
+                                return match_list_props_api(list, property, range)
+                            }
 
-                    _ => {
-                        return Err((
-                            format!("Indexing of value '{:?}' not yet supported", base),
-                            range,
-                        ))
+                            _ => {
+                                return Err((
+                                    format!("Indexing of value '{:?}' not yet supported", base),
+                                    range,
+                                ))
+                            }
+                        };
                     }
-                };
+                    ExprMember::FuncCall(FuncCall(Identifier(fn_name, _), values, _)) => {
+                        // here are method calls
+                        match fn_name {
+                            "map" => {}
+                            _ => (),
+                        }
+                        todo!()
+                    }
+                }
+            }
+            PklExpr::FuncCall(FuncCall(Identifier(name, _), args, rng)) => {
+                // all function calls
+                match name {
+                    "List" => return Ok(self.evaluate_list(args)?),
+                    _ => todo!(),
+                }
             }
         }
     }

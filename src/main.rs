@@ -78,7 +78,7 @@ list_with_values = List(pigeon, int, duration, two, list, List(), pigeon.lifespa
         src.len()
     );
 
-    // println!("{:?}", pkl);
+    println!("{:?}", pkl);
 
     Ok(())
 }
