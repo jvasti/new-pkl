@@ -59,9 +59,10 @@ pub fn match_string_props_api<'a, 'b>(
             let chars = s
                 .chars()
                 .into_iter()
-                .map(|c| PklValue::Char(c))
+                .map(|c| PklValue::String(c.to_string()))
                 .collect::<Vec<_>>();
 
+            // typealias Char = String(length == 1)
             return Ok(PklValue::List(chars));
         }
         "codePoints" => {

@@ -4,6 +4,7 @@ use crate::{
     },
     Pkl,
 };
+use bool_api::match_bool_methods_api;
 use data_size::{match_data_size_props_api, Byte};
 use duration::{match_duration_props_api, Duration};
 use float_api::match_float_props_api;
@@ -17,6 +18,7 @@ use hashbrown::Hashmap as HashMap;
 #[cfg(not(feature = "hashbrown_support"))]
 use std::collections::HashMap;
 
+mod bool_api;
 pub mod data_size;
 pub mod duration;
 mod float_api;
@@ -57,9 +59,6 @@ pub enum PklValue<'a> {
     /// because we may need to manipulate and modify them.
     String(String),
 
-    /// An character.
-    Char(char),
-
     /// A List
     List(Vec<PklValue<'a>>),
 
@@ -74,6 +73,183 @@ pub enum PklValue<'a> {
 
     // A datasize
     DataSize(Byte<'a>),
+}
+
+impl<'a> PklValue<'a> {
+    pub fn get_type(&self) -> &str {
+        match self {
+            PklValue::Null => return "Null",
+            PklValue::Bool(_) => return "Bool",
+            PklValue::Float(_) => return "Float",
+            PklValue::Int(_) => return "Int",
+            PklValue::String(_) => return "String",
+            PklValue::List(_) => return "List",
+            PklValue::Object(_) => return "Object",
+            PklValue::ClassInstance(_, _) => return "ClassInstance",
+            PklValue::Duration(_) => return "Duration",
+            PklValue::DataSize(_) => return "DataSize",
+        }
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, PklValue::String(_))
+    }
+
+    pub fn is_bool(&self) -> bool {
+        matches!(self, PklValue::Bool(_))
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, PklValue::Float(_) | PklValue::Int(_))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, PklValue::Null)
+    }
+
+    pub fn is_list(&self) -> bool {
+        matches!(self, PklValue::List(_))
+    }
+
+    pub fn is_object(&self) -> bool {
+        matches!(self, PklValue::Object(_))
+    }
+
+    pub fn is_datasize(&self) -> bool {
+        matches!(self, PklValue::DataSize(_))
+    }
+
+    pub fn is_duration(&self) -> bool {
+        matches!(self, PklValue::Duration(_))
+    }
+
+    pub fn as_string(&self) -> Option<&String> {
+        if let PklValue::String(ref s) = self {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        if let PklValue::Bool(b) = self {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            PklValue::Float(f) => Some(*f),
+            PklValue::Int(i) => Some(*i as f64),
+            _ => None,
+        }
+    }
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            PklValue::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            PklValue::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn as_list(&self) -> Option<&Vec<PklValue<'a>>> {
+        if let PklValue::List(ref l) = self {
+            Some(l)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_object(&self) -> Option<&HashMap<&'a str, PklValue<'a>>> {
+        if let PklValue::Object(ref o) = self {
+            Some(o)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_datasize(&self) -> Option<&Byte<'a>> {
+        if let PklValue::DataSize(ref d) = self {
+            Some(d)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_duration(&self) -> Option<&Duration<'a>> {
+        if let PklValue::Duration(ref d) = self {
+            Some(d)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<bool> for PklValue<'_> {
+    fn from(value: bool) -> Self {
+        PklValue::Bool(value)
+    }
+}
+
+impl From<f64> for PklValue<'_> {
+    fn from(value: f64) -> Self {
+        PklValue::Float(value)
+    }
+}
+
+impl From<i64> for PklValue<'_> {
+    fn from(value: i64) -> Self {
+        PklValue::Int(value)
+    }
+}
+
+impl From<String> for PklValue<'_> {
+    fn from(value: String) -> Self {
+        PklValue::String(value)
+    }
+}
+
+impl<'a> From<Vec<PklValue<'a>>> for PklValue<'a> {
+    fn from(value: Vec<PklValue<'a>>) -> Self {
+        PklValue::List(value)
+    }
+}
+
+impl<'a> From<HashMap<&'a str, PklValue<'a>>> for PklValue<'a> {
+    fn from(value: HashMap<&'a str, PklValue<'a>>) -> Self {
+        PklValue::Object(value)
+    }
+}
+
+impl<'a> From<(String, HashMap<&'a str, PklValue<'a>>)> for PklValue<'a> {
+    fn from(value: (String, HashMap<&'a str, PklValue<'a>>)) -> Self {
+        PklValue::ClassInstance(Box::leak(value.0.into_boxed_str()), value.1)
+    }
+}
+
+impl<'a> From<Duration<'a>> for PklValue<'a> {
+    fn from(value: Duration<'a>) -> Self {
+        PklValue::Duration(value)
+    }
+}
+
+impl<'a> From<Byte<'a>> for PklValue<'a> {
+    fn from(value: Byte<'a>) -> Self {
+        PklValue::DataSize(value)
+    }
+}
+
+impl<'a> From<()> for PklValue<'a> {
+    fn from(_: ()) -> Self {
+        PklValue::Null
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -247,11 +423,56 @@ impl<'a> PklTable<'a> {
                     }
                     ExprMember::FuncCall(FuncCall(Identifier(fn_name, _), values, _)) => {
                         // here are method calls
-                        match fn_name {
-                            "map" => {}
-                            _ => (),
+                        let args = self.evaluate_fn_args(values)?;
+
+                        match base {
+                            PklValue::Bool(bool) => {
+                                return match_bool_methods_api(bool, fn_name, args, range)
+                            }
+                            PklValue::Int(int) => return match_int_props_api(int, fn_name, range),
+                            PklValue::Float(float) => {
+                                return match_float_props_api(float, fn_name, range)
+                            }
+                            PklValue::Object(hashmap) => {
+                                if let Some(data) = hashmap.get(&fn_name) {
+                                    return Ok(data.to_owned());
+                                } else {
+                                    return Err((
+                                        format!("Object does not possess a '{fn_name}' field"),
+                                        range,
+                                    ));
+                                }
+                            }
+                            PklValue::String(s) => {
+                                return match_string_props_api(&s, fn_name, range)
+                            }
+                            PklValue::ClassInstance(_class_name, hashmap) => {
+                                if let Some(data) = hashmap.get(&fn_name) {
+                                    return Ok(data.to_owned());
+                                } else {
+                                    return Err((
+                                        format!("Object does not possess a '{fn_name}' field"),
+                                        range,
+                                    ));
+                                }
+                            }
+                            PklValue::DataSize(byte) => {
+                                return match_data_size_props_api(byte, fn_name, range)
+                            }
+                            PklValue::Duration(duration) => {
+                                return match_duration_props_api(duration, fn_name, range)
+                            }
+                            PklValue::List(list) => {
+                                return match_list_props_api(list, fn_name, range)
+                            }
+
+                            _ => {
+                                return Err((
+                                    format!("Indexing of value '{:?}' not yet supported", base),
+                                    range,
+                                ))
+                            }
                         }
-                        todo!()
                     }
                 }
             }
@@ -305,7 +526,7 @@ impl<'a> PklTable<'a> {
         new_hash.map(PklValue::Object)
     }
 
-    fn evaluate_list(&self, values: Vec<PklExpr<'a>>) -> PklResult<PklValue<'a>> {
+    fn evaluate_fn_args(&self, values: Vec<PklExpr<'a>>) -> PklResult<Vec<PklValue<'a>>> {
         let new_hash: Result<Vec<_>, _> = values
             .into_iter()
             .map(|expr| {
@@ -313,6 +534,12 @@ impl<'a> PklTable<'a> {
                 Ok(evaluated_expr)
             })
             .collect();
+
+        new_hash
+    }
+
+    fn evaluate_list(&self, values: Vec<PklExpr<'a>>) -> PklResult<PklValue<'a>> {
+        let new_hash = self.evaluate_fn_args(values);
 
         new_hash.map(PklValue::List)
     }
