@@ -1,7 +1,7 @@
 use new_pkl::{Pkl, PklResult};
 use std::time::Instant;
 
-fn main() -> PklResult<()> {
+fn main() -> Result<(), (String, String)> {
     let src = "import \"test.pkl\"
 
 `Hello` = \"hello\"
@@ -36,6 +36,7 @@ duration = int.min
 datasize = int.gb
 x = 3.4e2.ms
 two = -2.ms
+
 pigeon {
   name = \"Turtle dove\"
   extinct = false
@@ -59,13 +60,17 @@ pigeon = new Bird {
   lifespan = 8
   migratory = false
 }
+
+list = List()
+list_with_values = List(pigeon, int, duration, two, list, List())
 ";
 
     let src = src.repeat(1);
     let time = Instant::now();
 
     let mut pkl = Pkl::new();
-    pkl.parse(&src)?;
+    pkl.parse(&src)
+        .map_err(|(s, rng)| (s, src[rng].to_owned()))?;
 
     println!(
         "{}ms to parse {} chars",

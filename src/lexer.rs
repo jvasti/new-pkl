@@ -124,6 +124,11 @@ pub enum PklToken<'a> {
     }, priority = 2)]
     Float(f64),
 
+    #[regex(r#"(_|\$)[a-zA-Z0-9_]+\("#, |lex| {let raw=lex.slice();&raw[..raw.len()-1]})]
+    #[regex(r#"[a-zA-Z][a-zA-Z0-9_]*\("#, |lex| {let raw=lex.slice();&raw[..raw.len()-1]})]
+    #[regex(r#"`([^`\\]|\\[`\\bnfrt]|\\u\{[a-fA-F0-9]+})*`\("#, |lex| {let raw=lex.slice();&raw[1..raw.len()-2]})]
+    FunctionCall(&'a str),
+
     #[regex(r#"(_|\$)[a-zA-Z0-9_]+"#, |lex| lex.slice())]
     #[regex(r#"[a-zA-Z][a-zA-Z0-9_]*"#, |lex| lex.slice())]
     Identifier(&'a str),

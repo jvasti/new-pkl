@@ -234,6 +234,7 @@ impl<'a> PklTable<'a> {
             AstPklValue::String(s, _) | AstPklValue::MultiLineString(s, _) => {
                 PklValue::String(s.to_owned())
             }
+            AstPklValue::List(values, _) => self.evaluate_list(values)?,
             AstPklValue::Object(o) => self.evaluate_object(o)?,
             AstPklValue::ClassInstance(a, b, _) => self.evaluate_class_instance(a, b)?,
             AstPklValue::AmendedObject(a, b, _) => self.evaluate_amended_object(a, b)?,
@@ -253,6 +254,18 @@ impl<'a> PklTable<'a> {
                 .collect();
 
         new_hash.map(PklValue::Object)
+    }
+
+    fn evaluate_list(&self, values: Vec<PklExpr<'a>>) -> PklResult<PklValue<'a>> {
+        let new_hash: Result<Vec<_>, _> = values
+            .into_iter()
+            .map(|expr| {
+                let evaluated_expr = self.evaluate(expr)?;
+                Ok(evaluated_expr)
+            })
+            .collect();
+
+        new_hash.map(PklValue::List)
     }
 
     fn evaluate_class_instance(&self, a: &'a str, b: ExprHash<'a>) -> PklResult<PklValue<'a>> {
