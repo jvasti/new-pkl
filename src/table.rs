@@ -6,6 +6,7 @@ use data_size::{match_data_size_props_api, Byte};
 use duration::{match_duration_props_api, Duration};
 use float_api::match_float_props_api;
 use int_api::match_int_props_api;
+use list_api::match_list_props_api;
 use std::{fs, ops::Range};
 use string_api::match_string_props_api;
 
@@ -18,6 +19,7 @@ pub mod data_size;
 pub mod duration;
 mod float_api;
 mod int_api;
+mod list_api;
 mod string_api;
 
 /// Represents a value in the PKL format.
@@ -36,6 +38,8 @@ mod string_api;
 /// * `ClassInstance` - Represents an instance of a class, which includes the class name and its properties.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklValue<'a> {
+    Null,
+
     /// A boolean value.
     Bool(bool),
 
@@ -222,6 +226,7 @@ impl<'a> PklTable<'a> {
                     PklValue::Duration(duration) => {
                         return match_duration_props_api(duration, property, range)
                     }
+                    PklValue::List(list) => return match_list_props_api(list, property, range),
 
                     _ => {
                         return Err((
