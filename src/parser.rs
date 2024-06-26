@@ -37,12 +37,25 @@ pub enum PklStatement<'a> {
 }
 /* ANCHOR_END: statements */
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct Identifier<'a>(pub &'a str, pub Range<usize>);
+
+impl<'a> Identifier<'a> {
+    pub fn span(&self) -> Range<usize> {
+        self.1.to_owned()
+    }
+    pub fn value(&self) -> &str {
+        self.0
+    }
+}
+
 /* ANCHOR: expression */
 /// Represent any valid Pkl expression.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PklExpr<'a> {
-    Identifier(&'a str, Range<usize>),
+    Identifier(Identifier<'a>),
     Value(AstPklValue<'a>),
+    MemberExpression(Box<PklExpr<'a>>, Identifier<'a>, Range<usize>),
 }
 
 impl<'a> PklExpr<'a> {
@@ -57,7 +70,8 @@ impl<'a> PklExpr<'a> {
     pub fn span(&self) -> Range<usize> {
         match self {
             Self::Value(v) => v.span(),
-            Self::Identifier(_, indexes) => indexes.to_owned(),
+            Self::Identifier(Identifier(_, span)) => span.to_owned(),
+            Self::MemberExpression(_, _, span) => span.to_owned(),
         }
     }
 }
@@ -70,7 +84,7 @@ impl<'a> From<AstPklValue<'a>> for PklExpr<'a> {
 }
 impl<'a> From<(&'a str, Range<usize>)> for PklExpr<'a> {
     fn from((value, indexes): (&'a str, Range<usize>)) -> Self {
-        PklExpr::Identifier(value, indexes)
+        PklExpr::Identifier(Identifier(value, indexes))
     }
 }
 
@@ -226,11 +240,11 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                         None => {
                             fn optional_id<'a>(
                                 lexer: &mut Lexer<'a, PklToken<'a>>,
-                            ) -> PklResult<(&'a str, Range<usize>)> {
+                            ) -> PklResult<Identifier<'a>> {
                                 parse_identifier!(lexer, "unexpected token here, expected an identifier (context: import)")
                             }
 
-                            let (other_name, other_rng) = optional_id(lexer)?;
+                            let Identifier(other_name, other_rng) = optional_id(lexer)?;
                             let start = rng.start;
                             let end = other_rng.end;
                             *rng = start..end;
@@ -242,6 +256,47 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
                                     .to_owned(),
                                 lexer.span(),
                             ))
+                        }
+                    }
+                } else {
+                    return Err((
+                        "unexpected token here (context: global)".to_owned(),
+                        lexer.span(),
+                    ));
+                }
+            }
+            Ok(PklToken::Dot) => {
+                if let Some(PklStatement::Constant(_, value, rng)) = statements.last_mut() {
+                    fn parse_id<'a>(
+                        lexer: &mut Lexer<'a, PklToken<'a>>,
+                    ) -> PklResult<Identifier<'a>> {
+                        parse_identifier!(lexer)
+                    }
+                    let identifier = parse_id(lexer)?;
+                    let expr_start = value.span().start;
+                    let expr_end = identifier.span().end;
+
+                    match value {
+                        PklExpr::Identifier(_) => {
+                            *value = PklExpr::MemberExpression(
+                                Box::new(value.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
+                        }
+                        PklExpr::Value(_) => {
+                            *value = PklExpr::MemberExpression(
+                                Box::new(value.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
+                        }
+                        PklExpr::MemberExpression(_, _, _) => {
+                            *value = PklExpr::MemberExpression(
+                                Box::new(value.clone()),
+                                identifier,
+                                expr_start..expr_end,
+                            )
                         }
                     }
                 } else {
@@ -313,7 +368,7 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
         match lexer.next() {
             Some(Ok(PklToken::Bool(b))) => return Ok(AstPklValue::Bool(b, lexer.span()).into()),
             Some(Ok(PklToken::Identifier(id))) | Some(Ok(PklToken::IllegalIdentifier(id))) => {
-                return Ok(PklExpr::Identifier(id, lexer.span()))
+                return Ok(PklExpr::Identifier(Identifier(id, lexer.span())))
             }
             Some(Ok(PklToken::New)) => return parse_class_instance(lexer),
 

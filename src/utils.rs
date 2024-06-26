@@ -45,11 +45,12 @@ macro_rules! parse_identifier {
     // Pattern 2: Lexer with custom error messages
     ($lexer:expr, $default_unexpected:expr, $eof_error:expr) => {{
         use crate::lexer::PklToken;
+        use crate::parser::Identifier;
         let start = $lexer.span().start;
         while let Some(token) = $lexer.next() {
             match token {
                 Ok(PklToken::Identifier(id)) | Ok(PklToken::IllegalIdentifier(id)) => {
-                    return Ok((id, start..$lexer.span().end))
+                    return Ok(Identifier(id, start..$lexer.span().end))
                 }
                 Ok(PklToken::NewLine) | Ok(PklToken::Space) => {
                     // Skip spaces and newlines

@@ -1,13 +1,18 @@
 use crate::{
-    parser::{AstPklValue, ExprHash, PklExpr, PklResult, PklStatement},
+    parser::{AstPklValue, ExprHash, Identifier, PklExpr, PklResult, PklStatement},
     Pkl,
 };
-use std::{fs, ops::Range};
+use data_size::Byte;
+use duration::duration_from_value_and_unit;
+use std::{fs, ops::Range, time::Duration};
 
 #[cfg(feature = "hashbrown_support")]
 use hashbrown::Hashmap as HashMap;
 #[cfg(not(feature = "hashbrown_support"))]
 use std::collections::HashMap;
+
+mod data_size;
+mod duration;
 
 /// Represents a value in the PKL format.
 ///
@@ -45,6 +50,12 @@ pub enum PklValue<'a> {
 
     /// An instance of a class, including the class name and its properties.
     ClassInstance(&'a str, HashMap<&'a str, PklValue<'a>>),
+
+    /// A duration
+    Duration(Duration),
+
+    // A datasize
+    DataSize(Byte),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -159,12 +170,52 @@ impl<'a> PklTable<'a> {
     /// A `PklResult` containing the evaluated value or an error message with the range.
     pub fn evaluate(&self, expr: PklExpr<'a>) -> PklResult<PklValue<'a>> {
         match expr {
-            PklExpr::Identifier(id, range) => self
+            PklExpr::Identifier(Identifier(id, range)) => self
                 .variables
                 .get(id)
                 .cloned()
                 .ok_or_else(|| (format!("unknown variable `{}`", id), range)),
             PklExpr::Value(value) => self.evaluate_value(value),
+            PklExpr::MemberExpression(base_expr, indexor, range) => {
+                let base = self.evaluate(*base_expr)?;
+                let value = indexor.value();
+
+                match base {
+                    PklValue::Int(int) => {
+                        if let Some(unit) = duration::Unit::from_str(value) {
+                            return Ok(PklValue::Duration(duration_from_value_and_unit(
+                                int as f64, unit,
+                            )));
+                        }
+
+                        if let Some(unit) = data_size::Unit::from_str(value) {
+                            return Ok(PklValue::DataSize(Byte::from_value_and_unit(
+                                int as f64, unit,
+                            )));
+                        }
+                    }
+                    PklValue::Float(float) => {
+                        if let Some(unit) = duration::Unit::from_str(value) {
+                            return Ok(PklValue::Duration(duration_from_value_and_unit(
+                                float, unit,
+                            )));
+                        }
+
+                        if let Some(unit) = data_size::Unit::from_str(value) {
+                            return Ok(PklValue::DataSize(Byte::from_value_and_unit(float, unit)));
+                        }
+                    }
+                    PklValue::Object(hashmap) => {}
+                    _ => {
+                        return Err((
+                            format!("Indexing of value '{:?}' not yet supported", base),
+                            range,
+                        ))
+                    }
+                };
+
+                todo!()
+            }
         }
     }
 

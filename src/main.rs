@@ -29,6 +29,10 @@ bird {
   }
 }
 
+int = 3
+duration = int.min
+datasize = int.gb
+
 pigeon {
   name = \"Turtle dove\"
   extinct = false
@@ -65,6 +69,8 @@ pigeon = new Bird {
         time.elapsed().as_millis(),
         src.len()
     );
+
+    println!("{:?}", pkl);
 
     Ok(())
 }
