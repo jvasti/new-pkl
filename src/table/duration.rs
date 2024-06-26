@@ -18,6 +18,7 @@ pub fn match_duration_props_api<'a>(
             return Ok(PklValue::String(duration.unit.to_string()));
         }
         "isPositive" => return Ok(PklValue::Bool(!duration.is_negative)),
+        "isoString" => return Ok(PklValue::String(duration.to_iso_string())),
         _ => {
             return Err((
                 format!("DataSize does not possess {} property", property),
@@ -86,6 +87,43 @@ impl<'a> Duration<'a> {
             initial_value,
             is_negative,
         }
+    }
+
+    pub fn to_iso_string(&self) -> String {
+        let seconds = self.duration.as_secs();
+        let nanos = self.duration.subsec_nanos();
+
+        let hours = seconds / 3600;
+        let minutes = (seconds % 3600) / 60;
+        let secs = seconds % 60;
+        let millis = nanos / 1_000_000; // Convert nanoseconds to milliseconds
+
+        let mut iso_string = String::from("");
+
+        if self.is_negative {
+            iso_string.push('-');
+        }
+
+        iso_string.push_str("PT");
+
+        if hours > 0 {
+            iso_string.push_str(&format!("{}H", hours));
+        }
+        if minutes > 0 {
+            iso_string.push_str(&format!("{}M", minutes));
+        }
+        if secs > 0 || millis > 0 {
+            if millis > 0 {
+                iso_string.push_str(&format!("{}.{}S", secs, format!("{:03}", millis)));
+            } else {
+                iso_string.push_str(&format!("{}S", secs));
+            }
+        } else if iso_string == "PT" || iso_string == "-PT" {
+            // If there are no hours, minutes, or seconds, and the string is still "PT"
+            iso_string.push_str("0S"); // Handle the edge case where the duration is zero
+        }
+
+        iso_string
     }
 
     pub fn from_int_and_unit(value: i64, unit: Unit) -> Self {
