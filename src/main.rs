@@ -62,7 +62,7 @@ pigeon = new Bird {
 }
 
 list = List()
-list_with_values = List(pigeon, int, duration, two, list, List())
+list_with_values = List(pigeon, int, duration, two, list, List(), pigeon.lifespan)
 ";
 
     let src = src.repeat(1);

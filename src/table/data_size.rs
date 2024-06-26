@@ -7,11 +7,11 @@ use std::fmt;
 use std::ops::Range;
 
 /// Based on v0.26.0
-pub fn match_data_size_props_api<'a>(
-    byte: Byte<'a>,
+pub fn match_data_size_props_api<'a, 'b>(
+    byte: Byte<'b>,
     property: &'a str,
     range: Range<usize>,
-) -> PklResult<PklValue<'a>> {
+) -> PklResult<PklValue<'b>> {
     match property {
         "value" => {
             return Ok(*byte.initial_value);

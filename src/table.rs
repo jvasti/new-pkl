@@ -2,8 +2,8 @@ use crate::{
     parser::{AstPklValue, ExprHash, Identifier, PklExpr, PklResult, PklStatement},
     Pkl,
 };
-use data_size::Byte;
-use duration::Duration;
+use data_size::{match_data_size_props_api, Byte};
+use duration::{match_duration_props_api, Duration};
 use float_api::match_float_props_api;
 use int_api::match_int_props_api;
 use std::{fs, ops::Range};
@@ -206,6 +206,23 @@ impl<'a> PklTable<'a> {
                         }
                     }
                     PklValue::String(s) => return match_string_props_api(&s, property, range),
+                    PklValue::ClassInstance(_class_name, hashmap) => {
+                        if let Some(data) = hashmap.get(&property) {
+                            return Ok(data.to_owned());
+                        } else {
+                            return Err((
+                                format!("Object does not possess a '{property}' field"),
+                                range,
+                            ));
+                        }
+                    }
+                    PklValue::DataSize(byte) => {
+                        return match_data_size_props_api(byte, property, range)
+                    }
+                    PklValue::Duration(duration) => {
+                        return match_duration_props_api(duration, property, range)
+                    }
+
                     _ => {
                         return Err((
                             format!("Indexing of value '{:?}' not yet supported", base),

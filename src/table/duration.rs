@@ -5,11 +5,11 @@ use std::{ops::Range, time::Duration as StdDuration};
 // pub const DURATION_UNITS: [&str; 7] = ["ns", "us", "ms", "s", "min", "h", "d"];
 
 /// Based on v0.26.0
-pub fn match_duration_props_api<'a>(
-    duration: Duration<'a>,
+pub fn match_duration_props_api<'a, 'b>(
+    duration: Duration<'b>,
     property: &'a str,
     range: Range<usize>,
-) -> PklResult<PklValue<'a>> {
+) -> PklResult<PklValue<'b>> {
     match property {
         "value" => {
             return Ok(*duration.initial_value);

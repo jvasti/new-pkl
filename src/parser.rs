@@ -406,20 +406,12 @@ fn parse_expr<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
 
 fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>> {
     let start = lexer.span().start;
-    let mut values = Vec::new();
+    let mut values: Vec<PklExpr> = Vec::new();
     let mut is_comma = true;
 
     loop {
         match lexer.next() {
-            Some(Ok(PklToken::Comma)) if !is_comma => {
-                is_comma = true;
-                continue;
-            }
-            Some(Ok(PklToken::CloseParen)) => {
-                let end = lexer.span().end;
-                return Ok(PklExpr::Value(AstPklValue::List(values, start..end)));
-            }
-            Some(Ok(PklToken::Dot)) if is_comma => {
+            Some(Ok(PklToken::Dot)) if !is_comma => {
                 if let Some(last) = values.last_mut() {
                     let identifier = parse_basic_id(lexer)?;
                     let expr_start = last.span().start;
@@ -448,7 +440,17 @@ fn parse_list<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<PklExpr<'a>>
                             )
                         }
                     }
+                } else {
+                    return Err(("unexpected token '.'".to_owned(), lexer.span()));
                 }
+            }
+            Some(Ok(PklToken::Comma)) if !is_comma => {
+                is_comma = true;
+                continue;
+            }
+            Some(Ok(PklToken::CloseParen)) => {
+                let end = lexer.span().end;
+                return Ok(PklExpr::Value(AstPklValue::List(values, start..end)));
             }
 
             Some(Ok(PklToken::Space))
