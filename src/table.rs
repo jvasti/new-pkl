@@ -11,8 +11,8 @@ use hashbrown::Hashmap as HashMap;
 #[cfg(not(feature = "hashbrown_support"))]
 use std::collections::HashMap;
 
-mod data_size;
-mod duration;
+pub mod data_size;
+pub mod duration;
 
 /// Represents a value in the PKL format.
 ///

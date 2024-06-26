@@ -192,3 +192,8 @@ impl<'a> Pkl<'a> {
         }
     }
 }
+
+pub mod values {
+    pub use crate::table::data_size::{Byte, Unit as DataSizeUnit};
+    pub use crate::table::duration::Unit as DurationUnit;
+}
