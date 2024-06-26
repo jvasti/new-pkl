@@ -1,3 +1,4 @@
+use crate::generate_method;
 use crate::{PklResult, PklValue};
 use base64::prelude::*;
 use std::ops::Range;
@@ -78,6 +79,150 @@ pub fn match_string_props_api<'a, 'b>(
         _ => {
             return Err((
                 format!("String does not possess {} property", property),
+                range,
+            ))
+        }
+    }
+}
+
+/// Based on v0.26.0
+pub fn match_string_methods_api<'a, 'b>(
+    s: &'a str,
+    fn_name: &'a str,
+    args: Vec<PklValue<'b>>,
+    range: Range<usize>,
+) -> PklResult<PklValue<'b>> {
+    match fn_name {
+        "getOrNull" => {
+            generate_method!(
+                "getOrNull", &args;
+                0: Int;
+                |index: i64| {
+                    if let Some(s) = s.get(index as usize..(index+1) as usize) {
+                        return Ok(s.to_owned().into())
+                    }
+
+                    Ok(().into())
+                };
+                range
+            )
+        }
+        "substring" => {
+            generate_method!(
+                "substring", &args;
+                0: Int, 1: Int;
+                |(start, exclusiveEnd): (i64, i64)| {
+                    if start < 0 || start as usize >= s.len() {
+                        return Err(("start index is out of bound".to_owned(), range))
+                    }
+                    if exclusiveEnd < start || exclusiveEnd as usize >= s.len() {
+                        return Err(("exclusiveEnd index is out of bound".to_owned(), range))
+                    }
+
+                    if let Some(s) = s.get(start as usize..exclusiveEnd as usize) {
+                        return Ok(s.to_owned().into())
+                    }
+
+                    Ok(().into())
+                };
+                range
+            )
+        }
+        "substringOrNull" => {
+            generate_method!(
+                "substringOrNull", &args;
+                0: Int, 1: Int;
+                |(start, exclusiveEnd): (i64, i64)| {
+                    if start < 0 || start as usize >= s.len() || exclusiveEnd < start || exclusiveEnd as usize >= s.len() {
+                        return Ok(().into())
+                    }
+
+                    if let Some(s) = s.get(start as usize..exclusiveEnd as usize) {
+                        return Ok(s.to_owned().into())
+                    }
+
+                    Ok(().into())
+                };
+                range
+            )
+        }
+        "repeat" => {
+            generate_method!(
+                "repeat", &args;
+                0: Int;
+                |index: i64| {
+                    Ok(s.repeat(index as usize).into())
+                };
+                range
+            )
+        }
+        "contains" => {
+            generate_method!(
+                "contains", &args;
+                0: String;
+                |pattern: String| {
+                    Ok(s.contains(&pattern).into())
+                };
+                range
+            )
+        }
+        "matches" => {
+            generate_method!(
+                "matches", &args;
+                0: String;
+                |pattern: String| {
+                    return Err(("Method matches not yet implemented!".to_owned(), range))
+                };
+                range
+            )
+        }
+        "startsWith" => {
+            generate_method!(
+                "startsWith", &args;
+                0: String;
+                |pattern: String| {
+                    Ok(s.starts_with(&pattern).into())
+                };
+                range
+            )
+        }
+        "endsWith" => {
+            generate_method!(
+                "endsWith", &args;
+                0: String;
+                |pattern: String| {
+                    Ok(s.ends_with(&pattern).into())
+                };
+                range
+            )
+        }
+        "indexOf" => {
+            generate_method!(
+                "indexOf", &args;
+                0: String;
+                |pattern: String| {
+                    let result = s.find(&pattern).ok_or((format!("Cannot use indexOf to index pattern '{pattern}', it is not present in the string"), range))?;
+                    Ok((result as i64).into())
+                };
+                range
+            )
+        }
+        "indexOfOrNull" => {
+            generate_method!(
+                "indexOfOrNull", &args;
+                0: String;
+                |pattern: String| {
+                    Ok(s.find(&pattern).map(|x| x as i64).map(PklValue::Int).unwrap_or(PklValue::Null))
+                };
+                range
+            )
+        }
+        _ => {
+            return Err((
+                format!(
+                    "String does not possess {} method (or method not yet implemented)",
+                    fn_name
+                ),
                 range,
             ))
         }

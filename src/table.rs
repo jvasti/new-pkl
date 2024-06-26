@@ -444,7 +444,7 @@ impl<'a> PklTable<'a> {
                                 }
                             }
                             PklValue::String(s) => {
-                                return match_string_props_api(&s, fn_name, range)
+                                return match_string_methods_api(&s, fn_name, range)
                             }
                             PklValue::ClassInstance(_class_name, hashmap) => {
                                 if let Some(data) = hashmap.get(&fn_name) {

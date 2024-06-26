@@ -131,3 +131,95 @@ macro_rules! parse_string {
         Err(($eof_error.to_owned(), $lexer.span()))
     }};
 }
+
+// macro_rules! generate_method {
+//     ($name:expr;$args:expr; $($arg_index:literal : $arg_type:ident),+; $action:block $range:expr) => {{
+//         let name: &str = $name;
+//         let number_of_args: usize = count_args!($($arg_index),+);
+//         let args: &Vec<PklValue<'_>> = $args;
+
+//         if $args.len() != number_of_args {
+//             return Err((
+//                 format!(
+//                     "Boolean expects '{}' method to take exactly {} argument(s)",
+//                     name, number_of_args
+//                 ),
+//                 $range,
+//             ));
+//         }
+
+//         $(
+//             if args[$arg_index].get_type() != stringify!($arg_type) {
+//                 return Err((
+//                     format!(
+//                         "{} method expects argument at index {} to be of type {}, but found {}",
+//                         name, $arg_index, stringify!($arg_type), args[$arg_index].get_type()
+//                     ),
+//                     $range,
+//                 ));
+//             }
+//         )+
+
+//         $action
+//     }};
+// }
+
+// Helper macro to count arguments
+#[macro_export]
+macro_rules! count_args {
+    ($($arg_index:tt),*) => {
+        <[()]>::len(&[$(count_args!(@single $arg_index)),*])
+    };
+    (@single $arg_index:tt) => { () };
+}
+
+#[macro_export]
+macro_rules! generate_method {
+    ($name:expr,$args:expr; $($arg_index:tt : $arg_type:ident),+; $action:expr; $range:expr) => {{
+        use crate::count_args;
+
+        let name: &str = $name;
+        let number_of_args: usize = count_args!($($arg_index),+);
+        let args: &Vec<PklValue<'_>> = $args;
+
+        if $args.len() != number_of_args {
+            return Err((
+                format!(
+                    "Boolean expects '{}' method to take exactly {} argument(s)",
+                    name, number_of_args
+                ),
+                $range,
+            ));
+        }
+
+        $(
+            if args[$arg_index].get_type() != stringify!($arg_type) {
+                return Err((
+                    format!(
+                        "{} method expects argument at index {} to be of type {}, but found {}",
+                        name, $arg_index, stringify!($arg_type), args[$arg_index].get_type()
+                    ),
+                    $range,
+                ));
+            }
+        )+
+
+        let args_tuple = (
+            $(
+                if let PklValue::$arg_type(value) = &args[$arg_index] {
+                    *value
+                } else {
+                    return Err((
+                        format!(
+                            "{} method expects argument at index {} to be of type {}, but found {}",
+                            name, $arg_index, stringify!($arg_type), args[$arg_index].get_type()
+                        ),
+                        $range,
+                    ));
+                }
+            ),+
+        );
+
+        $action(args_tuple)
+    }};
+}
