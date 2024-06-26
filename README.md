@@ -10,6 +10,7 @@ Fastest pkl-parsing crate out there!
 - Support for nested objects, amends declaration, amends expression and chained amends declaration
 - Support for classical identifiers, $identifiers, _identifiers and illegal identifiers
 - Support for class instance
+- Support for Duration and Datasize
 
 ## Installation
 
