@@ -207,7 +207,7 @@ macro_rules! generate_method {
         let args_tuple = (
             $(
                 if let PklValue::$arg_type(value) = &args[$arg_index] {
-                    *value
+                    value.to_owned()
                 } else {
                     return Err((
                         format!(

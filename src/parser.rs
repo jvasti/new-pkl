@@ -52,10 +52,25 @@ impl<'a> Identifier<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FuncCall<'a>(pub Identifier<'a>, pub Vec<PklExpr<'a>>, pub Range<usize>);
 
+impl<'a> FuncCall<'a> {
+    pub fn span(&self) -> Range<usize> {
+        self.2.to_owned()
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExprMember<'a> {
     Identifier(Identifier<'a>),
     FuncCall(FuncCall<'a>),
+}
+
+impl<'a> ExprMember<'a> {
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            ExprMember::Identifier(id) => id.span(),
+            ExprMember::FuncCall(fn_call) => fn_call.span(),
+        }
+    }
 }
 
 impl<'a> From<Identifier<'a>> for ExprMember<'a> {
@@ -322,13 +337,13 @@ pub fn parse_pkl<'a>(lexer: &mut Lexer<'a, PklToken<'a>>) -> PklResult<Vec<PklSt
             }
             Ok(PklToken::Dot) => {
                 if let Some(PklStatement::Constant(_, value, _)) = statements.last_mut() {
-                    let identifier = parse_basic_id(lexer)?;
+                    let expr_member = parse_member_expr_member(lexer)?;
                     let expr_start = value.span().start;
-                    let expr_end = identifier.span().end;
+                    let expr_end = expr_member.span().end;
 
                     *value = PklExpr::MemberExpression(
                         Box::new(value.clone()),
-                        identifier.into(),
+                        expr_member.into(),
                         expr_start..expr_end,
                     );
                 } else {
@@ -440,13 +455,13 @@ fn parse_fn_call<'a>(
             Some(Ok(token)) => match token {
                 PklToken::Dot if !is_comma => {
                     if let Some(last) = values.last_mut() {
-                        let identifier = parse_basic_id(lexer)?;
+                        let expr_member = parse_member_expr_member(lexer)?;
                         let expr_start = last.span().start;
-                        let expr_end = identifier.span().end;
+                        let expr_end = expr_member.span().end;
 
                         *last = PklExpr::MemberExpression(
                             Box::new(last.clone()),
-                            identifier.into(),
+                            expr_member.into(),
                             expr_start..expr_end,
                         );
                     } else {

@@ -63,6 +63,9 @@ pigeon = new Bird {
 
 list = List()
 list_with_values = List(pigeon, int, duration, two, list, List(), pigeon.lifespan)
+
+STRING = \"test\".repeat(5)
+is_start = STRING.startsWith(\"testtest\")
 ";
 
     let src = src.repeat(1);

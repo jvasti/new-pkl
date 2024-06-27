@@ -11,7 +11,7 @@ use float_api::match_float_props_api;
 use int_api::match_int_props_api;
 use list_api::match_list_props_api;
 use std::{fs, ops::Range};
-use string_api::match_string_props_api;
+use string_api::{match_string_methods_api, match_string_props_api};
 
 #[cfg(feature = "hashbrown_support")]
 use hashbrown::Hashmap as HashMap;
@@ -429,6 +429,7 @@ impl<'a> PklTable<'a> {
                             PklValue::Bool(bool) => {
                                 return match_bool_methods_api(bool, fn_name, args, range)
                             }
+                            // todo! implement methods api for each one
                             PklValue::Int(int) => return match_int_props_api(int, fn_name, range),
                             PklValue::Float(float) => {
                                 return match_float_props_api(float, fn_name, range)
@@ -444,7 +445,7 @@ impl<'a> PklTable<'a> {
                                 }
                             }
                             PklValue::String(s) => {
-                                return match_string_methods_api(&s, fn_name, range)
+                                return match_string_methods_api(&s, fn_name, args, range)
                             }
                             PklValue::ClassInstance(_class_name, hashmap) => {
                                 if let Some(data) = hashmap.get(&fn_name) {
