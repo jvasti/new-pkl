@@ -111,15 +111,15 @@ pub fn match_string_methods_api<'a, 'b>(
             generate_method!(
                 "substring", &args;
                 0: Int, 1: Int;
-                |(start, exclusiveEnd): (i64, i64)| {
+                |(start, exclusive_end): (i64, i64)| {
                     if start < 0 || start as usize >= s.len() {
                         return Err(("start index is out of bound".to_owned(), range))
                     }
-                    if exclusiveEnd < start || exclusiveEnd as usize >= s.len() {
+                    if exclusive_end < start || exclusive_end as usize >= s.len() {
                         return Err(("exclusiveEnd index is out of bound".to_owned(), range))
                     }
 
-                    if let Some(s) = s.get(start as usize..exclusiveEnd as usize) {
+                    if let Some(s) = s.get(start as usize..exclusive_end as usize) {
                         return Ok(s.to_owned().into())
                     }
 
@@ -171,7 +171,7 @@ pub fn match_string_methods_api<'a, 'b>(
                 "matches", &args;
                 0: String;
                 |pattern: String| {
-                    return Err(("Method matches not yet implemented!".to_owned(), range))
+                     Ok((s.matches(&pattern).count() != 0).into())
                 };
                 range
             )
