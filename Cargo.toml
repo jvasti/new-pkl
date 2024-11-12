@@ -15,7 +15,8 @@ categories = ["parsing"]
 logos = "0.14.0"
 hashbrown = { version = "0.14.5", optional = true }
 base64 = "0.22.1"
-
+serde = { version = "1.0.215", optional = true, features = ["derive"] }
 
 [features]
 hashbrown_support = ["hashbrown"]
+serde_support = ["serde"]

@@ -1,5 +1,7 @@
 use lexer::PklToken;
 use parser::{parse_pkl, PklStatement};
+#[cfg(feature = "serde_support")]
+use serde::Serialize;
 use std::collections::HashMap;
 use table::{ast_to_table, PklTable};
 
@@ -12,6 +14,7 @@ pub use parser::PklResult;
 pub use table::PklValue;
 
 #[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 /// The `Pkl` struct represents the main interface for working with PKL data.
 pub struct Pkl<'a> {
     table: PklTable<'a>,
@@ -190,6 +193,14 @@ impl<'a> Pkl<'a> {
             Some(_) => Err((format!("Variable `{}` is not an object", name), 0..0)),
             None => Err((format!("Variable `{}` not found", name), 0..0)),
         }
+    }
+    /// Retrieves the Pkl table context
+    ///
+    /// # Returns
+    ///
+    /// A `PklTable` containing the Pkl context.
+    pub fn table(&self) -> &PklTable<'a> {
+        &self.table
     }
 }
 

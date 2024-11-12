@@ -10,6 +10,8 @@ use duration::{match_duration_props_api, Duration};
 use float_api::match_float_props_api;
 use int_api::match_int_props_api;
 use list_api::match_list_props_api;
+#[cfg(feature = "serde_support")]
+use serde::Serialize;
 use std::{fs, ops::Range};
 use string_api::{match_string_methods_api, match_string_props_api};
 
@@ -41,6 +43,8 @@ mod string_api;
 /// * `Object` - Represents a nested object, which is a hashmap of key-value pairs.
 /// * `ClassInstance` - Represents an instance of a class, which includes the class name and its properties.
 #[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
+#[cfg_attr(feature = "serde_support", serde(untagged))]
 pub enum PklValue<'a> {
     Null,
 
@@ -253,6 +257,7 @@ impl<'a> From<()> for PklValue<'a> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 pub struct PklTable<'a> {
     pub variables: HashMap<&'a str, PklValue<'a>>,
     imports: Vec<String>,

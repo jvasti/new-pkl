@@ -3,6 +3,8 @@
 // ];
 
 use crate::{PklResult, PklValue};
+#[cfg(feature = "serde_support")]
+use serde::Serialize;
 use std::fmt;
 use std::ops::Range;
 
@@ -44,6 +46,7 @@ pub fn match_data_size_props_api<'a, 'b>(
 /// An enum representing both binary (kibibytes, mebibytes, etc.)
 /// and decimal (kilobytes, megabytes, etc.) data size units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 pub enum Unit {
     B,
     KB,
@@ -81,6 +84,7 @@ impl Unit {
 
 /// Represents data sizes in bytes.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 pub struct Byte<'a> {
     bytes: i64,
     initial_value: Box<PklValue<'a>>,

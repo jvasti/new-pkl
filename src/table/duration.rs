@@ -1,4 +1,6 @@
 use crate::{PklResult, PklValue};
+#[cfg(feature = "serde_support")]
+use serde::Serialize;
 use std::fmt;
 use std::{ops::Range, time::Duration as StdDuration};
 
@@ -30,6 +32,7 @@ pub fn match_duration_props_api<'a, 'b>(
 
 /// An enum representing duration units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 pub enum Unit {
     NS,
     US,
@@ -58,6 +61,7 @@ impl Unit {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize))]
 pub struct Duration<'a> {
     duration: StdDuration,
     initial_value: Box<PklValue<'a>>,
